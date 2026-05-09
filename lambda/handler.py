@@ -13,6 +13,7 @@ BUCKET = os.environ["TRADES_BUCKET"]
 TRADES_KEY = "paper_trades.json"
 LEARNINGS_KEY = "learnings.json"
 DASHBOARD_KEY = "docs/paper_trades.json"
+RECOMMENDATIONS_KEY = "recommendations.json"
 
 DAILY_BUDGET = 100.0
 TOP_PICKS = 5
@@ -36,6 +37,52 @@ def save_trades(data):
 def save_learnings(data):
     data["last_updated"] = datetime.now().isoformat()
     s3.put_object(Bucket=BUCKET, Key=LEARNINGS_KEY, Body=json.dumps(data, indent=2), ContentType="application/json")
+
+
+def pre_market_recommend(event, context):
+    """Runs at 4:30 AM ET — screens S&P 500 using previous day's data and saves picks to S3."""
+    today = date.today().isoformat()
+
+    tickers = get_sp500_tickers()
+    ohlc_data = fetch_ohlc(tickers)
+
+    if not ohlc_data:
+        return {"statusCode": 200, "body": "No OHLC data available"}
+
+    results = run_full_analysis(ohlc_data, top_n=50, include_news=False, daytrade_mode=True)
+
+    qualified = [r for r in results if r["composite_score"] >= MIN_SCORE and r["confidence"] in ("HIGH", "MEDIUM")]
+    picks = qualified[:TOP_PICKS]
+
+    recommendations = {
+        "date": today,
+        "generated_at": datetime.now().isoformat(),
+        "picks": [],
+        "total_screened": len(ohlc_data),
+        "total_qualified": len(qualified),
+    }
+
+    for r in picks:
+        recommendations["picks"].append({
+            "ticker": r["ticker"],
+            "composite_score": r["composite_score"],
+            "confidence": r["confidence"],
+            "technical_score": r["technical_score"],
+            "pattern_score": r["pattern_score"],
+            "patterns_detected": r.get("patterns_detected", {}),
+            "technical_signals": r.get("technical_signals", {}),
+            "intraday_stats": r.get("intraday_stats", {}),
+        })
+
+    s3.put_object(
+        Bucket=BUCKET,
+        Key=RECOMMENDATIONS_KEY,
+        Body=json.dumps(recommendations, indent=2),
+        ContentType="application/json",
+    )
+
+    ticker_list = [p["ticker"] for p in picks]
+    return {"statusCode": 200, "body": f"Recommendations for {today}: {', '.join(ticker_list) or 'NONE'}"}
 
 
 def morning_buy(event, context):

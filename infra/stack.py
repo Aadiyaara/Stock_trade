@@ -37,7 +37,10 @@ class StockTraderStack(Stack):
 
         bucket.add_to_resource_policy(iam.PolicyStatement(
             actions=["s3:GetObject"],
-            resources=[bucket.arn_for_objects("paper_trades.json")],
+            resources=[
+                bucket.arn_for_objects("paper_trades.json"),
+                bucket.arn_for_objects("recommendations.json"),
+            ],
             principals=[iam.StarPrincipal()],
         ))
 
@@ -63,6 +66,12 @@ class StockTraderStack(Stack):
             "environment": {"TRADES_BUCKET": bucket.bucket_name},
         }
 
+        recommend_fn = _lambda.Function(self, "PreMarketRecommend",
+            function_name="stock-recommend",
+            handler="lambda/handler.pre_market_recommend",
+            **shared_props,
+        )
+
         morning_fn = _lambda.Function(self, "MorningBuy",
             function_name="stock-morning-buy",
             handler="lambda/handler.morning_buy",
@@ -81,9 +90,17 @@ class StockTraderStack(Stack):
             **shared_props,
         )
 
+        bucket.grant_read_write(recommend_fn)
         bucket.grant_read_write(morning_fn)
         bucket.grant_read_write(afternoon_fn)
         bucket.grant_read_write(learn_fn)
+
+        # 4:30 AM ET = 8:30 UTC
+        events.Rule(self, "PreMarketSchedule",
+            rule_name="stock-recommend",
+            schedule=events.Schedule.cron(minute="30", hour="8", week_day="MON-FRI"),
+            targets=[targets.LambdaFunction(recommend_fn)],
+        )
 
         # 9:35 AM ET = 13:35 UTC
         events.Rule(self, "MorningSchedule",
