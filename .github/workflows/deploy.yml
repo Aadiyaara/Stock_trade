@@ -1,0 +1,66 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install CDK
+        run: npm install -g aws-cdk
+
+      - name: Install CDK dependencies
+        run: |
+          cd infra
+          pip install -r requirements.txt
+
+      - name: Build Lambda layer
+        run: |
+          mkdir -p /tmp/layer/python
+          pip install -t /tmp/layer/python -r requirements.txt --platform manylinux2014_x86_64 --only-binary=:all:
+          cd /tmp/layer
+          zip -r /tmp/dependencies-layer.zip python/ -q
+
+      - name: Upload layer to S3
+        run: |
+          aws s3 cp /tmp/dependencies-layer.zip s3://stock-trader-deploy-536697230325/dependencies-layer.zip
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+
+      - name: CDK Deploy
+        run: |
+          cd infra
+          cdk deploy --require-approval never
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+
+      - name: Update Lambda layers
+        run: |
+          LAYER_ARN=$(aws lambda publish-layer-version \
+            --layer-name DepsLayerA0D7F79A \
+            --content S3Bucket=stock-trader-deploy-536697230325,S3Key=dependencies-layer.zip \
+            --compatible-runtimes python3.12 \
+            --query "LayerVersionArn" --output text)
+          for fn in stock-recommend stock-morning-buy stock-close-and-learn stock-build-cache; do
+            aws lambda update-function-configuration --function-name $fn --layers $LAYER_ARN --output text --query "FunctionName"
+          done
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
