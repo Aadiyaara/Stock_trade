@@ -7,20 +7,24 @@ Strategies:
 """
 import pandas as pd
 import numpy as np
-import yfinance as yf
+from src.data_fetcher import _fetch_single_ticker
+from datetime import datetime, timedelta
 
 
 def analyze_intraday_profile(ticker: str, days: int = 20) -> dict:
     """Analyze when a stock typically hits its intraday high/low.
-    
+
     Uses daily OHLC to compute:
     - avg % gain from open to high (potential profit target)
     - avg % drop from high to close (money left on table)
     - % of days where close < high by significant amount (early exit would help)
     """
-    df = yf.download(ticker, period=f"{days}d", progress=False)
-    if len(df) < 5:
+    end = datetime.now()
+    start = end - timedelta(days=days + 5)
+    df = _fetch_single_ticker(ticker, start, end)
+    if df is None or len(df) < 5:
         return {}
+    df = df.tail(days)
     
     # How much does it typically run up from open?
     open_to_high_pct = ((df["High"] - df["Open"]) / df["Open"] * 100)
@@ -80,9 +84,12 @@ def compute_exit_plan(tickers: list[str]) -> list[dict]:
 
 def backtest_exit_strategies(ticker: str, days: int = 20) -> dict:
     """Compare hold-to-close vs profit-target vs trailing-stop on historical data."""
-    df = yf.download(ticker, period=f"{days}d", progress=False)
-    if len(df) < 5:
+    end = datetime.now()
+    start = end - timedelta(days=days + 5)
+    df = _fetch_single_ticker(ticker, start, end)
+    if df is None or len(df) < 5:
         return {}
+    df = df.tail(days)
     
     profile = analyze_intraday_profile(ticker, days)
     target_pct = profile.get("suggested_profit_target_pct", 1.0)

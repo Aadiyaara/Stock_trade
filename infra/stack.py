@@ -63,7 +63,10 @@ class StockTraderStack(Stack):
             "layers": [deps_layer],
             "timeout": Duration.minutes(5),
             "memory_size": 1024,
-            "environment": {"TRADES_BUCKET": bucket.bucket_name},
+            "environment": {
+                "TRADES_BUCKET": bucket.bucket_name,
+                "POLYGON_API_KEY": "DT3pw8H1EFAcMF8LtysDQwOMfmtyAzqO",
+            },
         }
 
         recommend_fn = _lambda.Function(self, "PreMarketRecommend",
@@ -78,22 +81,29 @@ class StockTraderStack(Stack):
             **shared_props,
         )
 
-        afternoon_fn = _lambda.Function(self, "AfternoonClose",
-            function_name="stock-afternoon-close",
-            handler="lambda/handler.afternoon_close",
+        close_fn = _lambda.Function(self, "CloseAndLearn",
+            function_name="stock-close-and-learn",
+            handler="lambda/handler.close_and_learn",
             **shared_props,
         )
 
-        learn_fn = _lambda.Function(self, "Learn",
-            function_name="stock-learn",
-            handler="lambda/handler.learn",
+        cache_fn = _lambda.Function(self, "BuildCache",
+            function_name="stock-build-cache",
+            handler="lambda/handler.build_cache",
             **shared_props,
         )
 
         bucket.grant_read_write(recommend_fn)
         bucket.grant_read_write(morning_fn)
-        bucket.grant_read_write(afternoon_fn)
-        bucket.grant_read_write(learn_fn)
+        bucket.grant_read_write(close_fn)
+        bucket.grant_read_write(cache_fn)
+
+        # 3 cache runs: 1AM, 2AM, 3AM ET (5, 6, 7 UTC) — fetches ~60 tickers each
+        events.Rule(self, "CacheSchedule",
+            rule_name="stock-build-cache",
+            schedule=events.Schedule.cron(minute="0", hour="5,6,7", week_day="MON-FRI"),
+            targets=[targets.LambdaFunction(cache_fn)],
+        )
 
         # 4:30 AM ET = 8:30 UTC
         events.Rule(self, "PreMarketSchedule",
@@ -110,15 +120,8 @@ class StockTraderStack(Stack):
         )
 
         # 4:05 PM ET = 20:05 UTC
-        events.Rule(self, "AfternoonSchedule",
-            rule_name="stock-afternoon-close",
+        events.Rule(self, "CloseSchedule",
+            rule_name="stock-close-and-learn",
             schedule=events.Schedule.cron(minute="5", hour="20", week_day="MON-FRI"),
-            targets=[targets.LambdaFunction(afternoon_fn)],
-        )
-
-        # 4:30 PM ET = 20:30 UTC
-        events.Rule(self, "LearnSchedule",
-            rule_name="stock-learn",
-            schedule=events.Schedule.cron(minute="30", hour="20", week_day="MON-FRI"),
-            targets=[targets.LambdaFunction(learn_fn)],
+            targets=[targets.LambdaFunction(close_fn)],
         )

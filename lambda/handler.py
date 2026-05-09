@@ -1,15 +1,15 @@
 import json
 import os
 import boto3
-from datetime import datetime, date
-from src.data_fetcher import get_sp500_tickers, fetch_ohlc
+from datetime import datetime, date, timedelta
+from src.data_fetcher import get_sp500_tickers, fetch_ohlc, fetch_ohlc_cached, fetch_open_price, fetch_current_prices
 from src.screener import run_full_analysis
 from src.exit_strategy import analyze_intraday_profile
 from src.learn import analyze_performance, generate_insights, suggest_weight_adjustments, readiness_report
-import yfinance as yf
 
 s3 = boto3.client("s3")
 BUCKET = os.environ["TRADES_BUCKET"]
+POLYGON_KEY = os.environ.get("POLYGON_API_KEY", "DT3pw8H1EFAcMF8LtysDQwOMfmtyAzqO")
 TRADES_KEY = "paper_trades.json"
 LEARNINGS_KEY = "learnings.json"
 DASHBOARD_KEY = "docs/paper_trades.json"
@@ -44,7 +44,7 @@ def pre_market_recommend(event, context):
     today = date.today().isoformat()
 
     tickers = get_sp500_tickers()
-    ohlc_data = fetch_ohlc(tickers)
+    ohlc_data = fetch_ohlc_cached(tickers, s3_client=s3, bucket=BUCKET)
 
     if not ohlc_data:
         return {"statusCode": 200, "body": "No OHLC data available"}
@@ -53,6 +53,10 @@ def pre_market_recommend(event, context):
 
     qualified = [r for r in results if r["composite_score"] >= MIN_SCORE and r["confidence"] in ("HIGH", "MEDIUM")]
     picks = qualified[:TOP_PICKS]
+
+    # Get previous close as reference price
+    pick_tickers = [r["ticker"] for r in picks]
+    prev_closes = fetch_current_prices(pick_tickers)
 
     recommendations = {
         "date": today,
@@ -65,6 +69,7 @@ def pre_market_recommend(event, context):
     for r in picks:
         recommendations["picks"].append({
             "ticker": r["ticker"],
+            "prev_close": prev_closes.get(r["ticker"]),
             "composite_score": r["composite_score"],
             "confidence": r["confidence"],
             "technical_score": r["technical_score"],
@@ -93,42 +98,15 @@ def morning_buy(event, context):
         return {"statusCode": 200, "body": f"Already have picks for {today}"}
 
     tickers = get_sp500_tickers()
-    ohlc_data = fetch_ohlc(tickers)
+    ohlc_data = fetch_ohlc_cached(tickers, s3_client=s3, bucket=BUCKET)
     results = run_full_analysis(ohlc_data, top_n=50, include_news=False, daytrade_mode=True)
     top = results[:TOP_PICKS]
 
     picked_tickers = [r["ticker"] for r in top]
-    live_prices = {}
-    try:
-        intraday = yf.download(picked_tickers, period="1d", interval="1m", progress=False)
-        for ticker in picked_tickers:
-            try:
-                if len(picked_tickers) == 1:
-                    live_prices[ticker] = float(intraday["Open"].iloc[0])
-                else:
-                    live_prices[ticker] = float(intraday["Open"][ticker].iloc[0])
-            except (KeyError, IndexError):
-                pass
-    except (ValueError, KeyError):
-        pass
-
-    # Fallback: use daily open if intraday not available
-    if not live_prices:
-        try:
-            daily = yf.download(picked_tickers, period="5d", progress=False)
-            for ticker in picked_tickers:
-                try:
-                    if len(picked_tickers) == 1:
-                        live_prices[ticker] = float(daily["Open"].iloc[-1])
-                    else:
-                        live_prices[ticker] = float(daily["Open"][ticker].iloc[-1])
-                except (KeyError, IndexError):
-                    pass
-        except (ValueError, KeyError):
-            pass
+    live_prices = fetch_open_price(picked_tickers)
 
     if not live_prices:
-        return {"statusCode": 200, "body": "Market data unavailable — likely outside trading hours"}
+        return {"statusCode": 200, "body": "Market data unavailable"}
 
     qualified = [r for r in top if r["composite_score"] >= MIN_SCORE and r["confidence"] in ("HIGH", "MEDIUM")]
 
@@ -169,82 +147,118 @@ def morning_buy(event, context):
     return {"statusCode": 200, "body": f"Bought: {', '.join(bought)}"}
 
 
-def afternoon_close(event, context):
+def close_and_learn(event, context):
+    """Runs after market close: records P/L and runs learning analysis."""
+    import requests as _req
     today = date.today().isoformat()
     trades = load_trades()
 
     today_trades = [t for t in trades["trades"] if t["date"] == today and t["close_price"] is None]
-    if not today_trades:
-        return {"statusCode": 200, "body": f"No open trades for {today}"}
 
-    tickers = [t["ticker"] for t in today_trades]
-    prices = yf.download(tickers, period="1d", progress=False)
-
-    for t in today_trades:
-        ticker = t["ticker"]
-        try:
-            if len(tickers) == 1:
-                actual_open = float(prices["Open"].iloc[-1])
-            else:
-                actual_open = float(prices["Open"][ticker].iloc[-1])
-            if actual_open > 0 and abs(actual_open - t["open_price"]) / t["open_price"] > 0.001:
-                t["open_price"] = round(actual_open, 2)
-                t["shares"] = t["invested"] / actual_open
-        except (KeyError, IndexError):
-            pass
-
+    # --- Close trades ---
     day_pnl = 0
     day_optimal = 0
-    for t in today_trades:
-        ticker = t["ticker"]
+    if today_trades:
+        tickers = [t["ticker"] for t in today_trades]
+        day_bars = {}
+        for ticker in tickers:
+            try:
+                url = f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{today}/{today}"
+                resp = _req.get(url, params={"adjusted": "true", "apiKey": POLYGON_KEY}, timeout=10)
+                if resp.status_code == 200:
+                    results = resp.json().get("results", [])
+                    if results:
+                        day_bars[ticker] = results[0]
+            except Exception:
+                continue
+
+        for t in today_trades:
+            ticker = t["ticker"]
+            bar = day_bars.get(ticker)
+            if bar:
+                actual_open = float(bar["o"])
+                if actual_open > 0 and abs(actual_open - t["open_price"]) / t["open_price"] > 0.001:
+                    t["open_price"] = round(actual_open, 2)
+                    t["shares"] = t["invested"] / actual_open
+
+        for t in today_trades:
+            ticker = t["ticker"]
+            bar = day_bars.get(ticker, {})
+            close_price = float(bar.get("c", t["open_price"]))
+            high_price = float(bar.get("h", t["open_price"]))
+
+            pnl = t["shares"] * (close_price - t["open_price"])
+            optimal_pnl = t["shares"] * (high_price - t["open_price"])
+
+            t["close_price"] = round(close_price, 2)
+            t["high_price"] = round(high_price, 2)
+            t["pnl"] = round(pnl, 2)
+            t["optimal_pnl"] = round(optimal_pnl, 2)
+            t["missed_pnl"] = round(optimal_pnl - pnl, 2)
+
+            day_pnl += pnl
+            day_optimal += optimal_pnl
+
+        trades["summary"]["total_invested"] += DAILY_BUDGET
+        trades["summary"]["total_pnl"] += round(day_pnl, 2)
+        trades["summary"]["total_optimal_pnl"] = trades["summary"].get("total_optimal_pnl", 0) + round(day_optimal, 2)
+        trades["summary"]["days"] += 1
+        save_trades(trades)
+
+    # --- Learn ---
+    perf = analyze_performance(trades)
+    if perf["status"] != "NO_DATA":
+        insights = generate_insights(perf)
+        adjustments = suggest_weight_adjustments(perf)
+        readiness = readiness_report(perf)
+        learnings = {
+            "weight_adjustments": adjustments,
+            "insights": insights,
+            "performance": {k: v for k, v in perf.items() if k != "_raw_trades"},
+            "readiness": readiness,
+        }
+        save_learnings(learnings)
+
+    return {"statusCode": 200, "body": f"Day P/L: ${day_pnl:+.2f} | Learning complete"}
+
+
+def build_cache(event, context):
+    """Incrementally fetches OHLC data and caches in S3. Runs every 10 min to stay within rate limits."""
+    import time
+    from src.data_fetcher import _fetch_ticker_aggs, RATE_LIMIT_DELAY
+
+    tickers = get_sp500_tickers()
+    today = datetime.now().strftime("%Y-%m-%d")
+    start_str = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+
+    # Load existing cache
+    cache = {}
+    try:
+        obj = s3.get_object(Bucket=BUCKET, Key="cache/ohlc_cache.json")
+        cache = json.loads(obj["Body"].read())
+    except Exception:
+        pass
+
+    # Find stale/missing tickers
+    to_fetch = [t for t in tickers if t not in cache or cache[t].get("last_updated") != today]
+
+    fetched = 0
+    for ticker in to_fetch[:20]:
+        if fetched > 0 and fetched % 5 == 0:
+            time.sleep(RATE_LIMIT_DELAY)
         try:
-            if len(tickers) == 1:
-                close_price = float(prices["Close"].iloc[-1])
-                high_price = float(prices["High"].iloc[-1])
-            else:
-                close_price = float(prices["Close"][ticker].iloc[-1])
-                high_price = float(prices["High"][ticker].iloc[-1])
-        except (KeyError, IndexError):
-            close_price = t["open_price"]
-            high_price = t["open_price"]
+            df = _fetch_ticker_aggs(ticker, start_str, today)
+            if df is not None and len(df) >= 50:
+                cache[ticker] = {
+                    "last_updated": today,
+                    "bars": df.reset_index().assign(Date=lambda x: x["Date"].astype(str)).to_dict("records"),
+                }
+                fetched += 1
+        except Exception:
+            continue
 
-        pnl = t["shares"] * (close_price - t["open_price"])
-        optimal_pnl = t["shares"] * (high_price - t["open_price"])
+    # Save cache
+    s3.put_object(Bucket=BUCKET, Key="cache/ohlc_cache.json", Body=json.dumps(cache), ContentType="application/json")
 
-        t["close_price"] = round(close_price, 2)
-        t["high_price"] = round(high_price, 2)
-        t["pnl"] = round(pnl, 2)
-        t["optimal_pnl"] = round(optimal_pnl, 2)
-        t["missed_pnl"] = round(optimal_pnl - pnl, 2)
-
-        day_pnl += pnl
-        day_optimal += optimal_pnl
-
-    trades["summary"]["total_invested"] += DAILY_BUDGET
-    trades["summary"]["total_pnl"] += round(day_pnl, 2)
-    trades["summary"]["total_optimal_pnl"] = trades["summary"].get("total_optimal_pnl", 0) + round(day_optimal, 2)
-    trades["summary"]["days"] += 1
-
-    save_trades(trades)
-    return {"statusCode": 200, "body": f"Day P/L: ${day_pnl:+.2f} | Optimal: ${day_optimal:+.2f}"}
-
-
-def learn(event, context):
-    trades_data = load_trades()
-    perf = analyze_performance(trades_data)
-
-    if perf["status"] == "NO_DATA":
-        return {"statusCode": 200, "body": "No trades to analyze"}
-
-    insights = generate_insights(perf)
-    adjustments = suggest_weight_adjustments(perf)
-    readiness = readiness_report(perf)
-
-    learnings = {
-        "weight_adjustments": adjustments,
-        "insights": insights,
-        "performance": {k: v for k, v in perf.items() if k != "_raw_trades"},
-        "readiness": readiness,
-    }
-    save_learnings(learnings)
-    return {"statusCode": 200, "body": json.dumps(readiness)}
+    total_cached = sum(1 for t in tickers if t in cache and cache[t].get("last_updated") == today)
+    return {"statusCode": 200, "body": f"Cached {fetched} new tickers. Total fresh: {total_cached}/{len(tickers)}"}
