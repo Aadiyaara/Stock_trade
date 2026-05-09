@@ -1,7 +1,11 @@
 __pycache__/
 *.pyc
 *.log
+*.zip
 .env
 .aws-sam/
 .venv/
 node_modules/
+cdk.out/
+infra/.venv/
+infra/cdk.out/
