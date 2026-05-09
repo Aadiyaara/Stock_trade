@@ -1,177 +1,190 @@
-# Stock Recommender — System Overview
+# Stock Paper Trader — Knowledge Base
 
-## Purpose
-A Python-based daily trading tool that screens S&P 500 stocks for bullish day-trading opportunities, paper trades $100/day, tracks performance, and auto-learns from results.
+> Auto-updated with each commit. If this doc is stale, the pre-commit hook failed.
+
+## What This Does
+
+An automated paper trading system that:
+1. Screens all S&P 500 stocks daily for bullish day-trading setups
+2. Paper trades $100/day across the top 5 picks
+3. Tracks performance (P/L, optimal exits, win rate)
+4. Self-learns from results to improve over time
+5. Serves a public dashboard showing live results
 
 ## Architecture
 
 ```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        AWS (account: 536697230325)                   │
+│                                                                     │
+│  EventBridge (cron)           Lambda (Python 3.12)        S3        │
+│  ─────────────────           ─────────────────────    ──────────    │
+│  1AM, 2AM, 3AM ──────────▶  stock-build-cache     ──▶ ohlc_cache  │
+│  4:30 AM ET    ──────────▶  stock-recommend       ──▶ recs.json   │
+│  9:35 AM ET    ──────────▶  stock-morning-buy     ──▶ trades.json │
+│  4:05 PM ET    ──────────▶  stock-close-and-learn ──▶ trades.json │
+│                                                                     │
+└──────────────────────────────────┬──────────────────────────────────┘
+                                   │
+                    S3 public read │
+                                   ▼
+                    GitHub Pages Dashboard
+                    (aadiyaara.github.io/Stock_trade)
+```
+
+## Project Structure
+
+```
 stock-recommender/
-├── main.py              # CLI entry point for manual screening
-├── paper_trade.py       # Paper trading bot (buy/close/history)
-├── dashboard.py         # Web UI at localhost:8501
-├── learn.py             # Learning engine (performance analysis + readiness report)
-├── setup_schedule.sh    # Installs cron jobs for auto-trading
-├── sync_dashboard.sh    # Pushes results to GitHub Pages
-├── paper_trades.json    # Trade history (auto-generated)
-├── learnings.json       # Learning engine output (auto-generated)
-├── requirements.txt     # Python dependencies
+├── lambda/
+│   └── handler.py            # All Lambda function handlers
+├── infra/
+│   ├── app.py                # CDK app entry point
+│   ├── stack.py              # CDK stack (Lambda, EventBridge, S3, IAM)
+│   ├── cdk.json              # CDK config
+│   └── requirements.txt      # CDK Python deps
+├── src/
+│   ├── data_fetcher.py       # Polygon.io API: fetch OHLC, prices, caching
+│   ├── screener.py           # Scoring engine + intraday momentum filter
+│   ├── indicators.py         # Technical indicators (RSI, MACD, BB, MA, volume)
+│   ├── patterns.py           # 11 candlestick pattern detectors
+│   ├── news_sentiment.py     # Finviz headline scraping + TextBlob sentiment
+│   ├── exit_strategy.py      # Optimal exit detection (profit target, trailing stop)
+│   └── learn.py              # Performance analysis + readiness report
 ├── docs/
-│   └── index.html       # Static dashboard for GitHub Pages (shareable)
-└── src/
-    ├── data_fetcher.py    # S&P 500 ticker list + OHLC download
-    ├── patterns.py        # 11 candlestick pattern detectors
-    ├── indicators.py      # Technical indicators (RSI, MACD, BB, MA, volume)
-    ├── news_sentiment.py  # Finviz headline scraping + TextBlob sentiment
-    ├── screener.py        # Scoring engine + intraday momentum filter
-    └── exit_strategy.py   # Optimal exit detection (profit target, trailing stop)
+│   └── index.html            # Dashboard UI (reads from S3)
+├── main.py                   # CLI screener (for local use)
+├── paper_trade.py            # CLI paper trader (for local use)
+├── deploy.sh                 # One-command CDK deploy
+├── requirements.txt          # Python runtime deps
+└── KNOWLEDGE.md              # ← You are here
 ```
 
-## Data Flow
+## Lambda Functions
 
-```
-1. Fetch S&P 500 tickers (Wikipedia)
-2. Download 1-year OHLC via yfinance (batch, single API call)
-3. Quick-screen all 500 → top 50 bullish (momentum + volume + intraday filter)
-4. Deep-analyze top 50:
-   a. 11 candlestick patterns (last 5 days)
-   b. Technical indicators (RSI, MACD, Bollinger, MA alignment, golden cross, volume)
-   c. News sentiment (Finviz headlines + TextBlob polarity)
-   d. Intraday momentum (win rate, gap-fade rate, avg return)
-5. Composite scoring → rank → output top picks
-6. Exit strategy analysis → profit target + trailing stop per stock
-```
+### `stock-build-cache` — Data Collector
+- **Trigger:** 1:00 AM, 2:00 AM, 3:00 AM ET (Mon-Fri)
+- **What:** Fetches 1-year daily OHLC from Polygon.io for ~60 tickers per run
+- **Why:** Polygon free tier limits to 5 calls/min. 3 runs × 60 = ~180 tickers cached daily
+- **Output:** `s3://stock-trades-536697230325/cache/ohlc_cache.json`
+- **Note:** Cache accumulates over days. After ~3 days all 503 S&P tickers are fresh
+
+### `stock-recommend` — Pre-Market Screener
+- **Trigger:** 4:30 AM ET (Mon-Fri)
+- **What:** Screens cached OHLC data, picks top 5 qualified stocks, includes prev close as reference price
+- **Output:** `s3://stock-trades-536697230325/recommendations.json` (public)
+- **Qualification:** composite score ≥ 40 AND confidence ≥ MEDIUM
+
+### `stock-morning-buy` — Trade Executor
+- **Trigger:** 9:35 AM ET (Mon-Fri, 5 min after market open)
+- **What:** Gets actual open price from Polygon (1-min bars), records paper buy
+- **Output:** Updates `paper_trades.json` in S3
+- **Budget:** $100/day split across qualified picks ($20 each if 5 qualify)
+
+### `stock-close-and-learn` — Close + Analysis
+- **Trigger:** 4:05 PM ET (Mon-Fri, 5 min after market close)
+- **What:** Fetches close/high prices, calculates P/L, runs learning engine
+- **Output:** Updates `paper_trades.json` and `learnings.json` in S3
 
 ## Scoring System
 
-### Composite Score (Day Trading Mode)
-- 35% Technical indicators (0-100)
-- 20% Pattern confluence (0-30 normalized)
-- 10% News sentiment (0-20)
-- 35% Intraday momentum score
+### Pre-Screen (quick_bullish_rank) — All 503 tickers
+Fast 0-100 score to filter top 50:
+- Price > 50-day SMA → +25
+- Positive 20-day momentum → up to +25
+- Positive 5-day momentum → up to +25
+- Volume increasing → +25
+- Overextended (abnormal spike) → **hard skip**
+- High gap-fade rate → -30
 
-### Confidence Levels (Day Trading)
-- **HIGH**: 4+ signals AND intraday win rate >= 60% AND gap-fade <= 30%
-- **MEDIUM**: 3+ signals AND intraday win rate >= 50%
-- **LOW**: Everything else
+### Deep Analysis (analyze_stock) — Top 50 only
+Composite score (weighted):
 
-### Minimum Trade Threshold
-- Composite score >= 40
-- Confidence >= MEDIUM
-- If nothing qualifies → skip the day (preserve capital)
+| Weight | Component | Source |
+|--------|-----------|--------|
+| 35% | Technical indicators | RSI, MACD, Bollinger, MA alignment, golden cross, volume surge |
+| 20% | Candlestick patterns | 11 patterns checked over last 5 days |
+| 10% | News sentiment | Finviz headlines scored via TextBlob |
+| 35% | Intraday momentum | Win rate, avg return, gap-fade rate |
 
-## Intraday Momentum Filter
-Solves the "NVDA problem" — stocks that gap up overnight but sell off during market hours.
+### Confidence Levels
+- **HIGH**: ≥4 signals + intraday win ≥60% + gap-fade ≤30%
+- **MEDIUM**: ≥3 signals + intraday win ≥50%
+- **LOW**: Everything else (not traded)
 
-Metrics:
-- **intraday_win_rate**: % of days with positive open→close
-- **gap_fade_rate**: % of days that gap up then close lower (penalized)
-- **avg_intraday_pct**: average open→close return
-- **intraday_ratio**: % of total gains happening during market hours
+## Data Sources
 
-## Exit Strategy Module (`src/exit_strategy.py`)
+| Source | Used For | Auth |
+|--------|----------|------|
+| **Polygon.io** (free tier) | OHLC data, open/close prices | API key in Lambda env var |
+| **Wikipedia** | S&P 500 ticker list | None (scrape) |
+| **Finviz** | News headlines for sentiment | None (scrape) |
 
-Analyzes historical intraday behavior to recommend when to sell:
+## Key Concepts
 
-### Three Strategies
-1. **PROFIT_TARGET**: Stock regularly gives back gains → sell at fixed % above open
-2. **TRAILING_STOP**: Some giveback → sell if price drops X% from intraday high
-3. **HOLD_TO_CLOSE**: Stock tends to close near its high → just hold
+### Intraday Momentum Filter
+Solves the "gap-and-fade" problem — stocks that gap up overnight but sell off during market hours are bad for day trading.
 
-### How It Works
-- Computes avg open-to-high run-up (how much it typically gains)
-- Computes avg high-to-close giveback (how much it loses after peaking)
-- Suggests profit target = 70% of avg run-up (conservative)
-- Suggests trailing stop = 80% of avg giveback
-- Backtests all 3 strategies over 20 days to prove which is best
+- **intraday_win_rate**: % of last 10 days with positive open→close
+- **gap_fade_rate**: % of days that gap up then close lower (penalized heavily)
+- **avg_intraday_pct**: mean open→close return
+- **overextended**: abnormal recent spike → excluded entirely
 
-### Close Report Tracks "Money Left on Table"
-Each trade records:
-- `close_price`: what we sold at (market close)
-- `high_price`: intraday high (what we could have sold at)
-- `optimal_pnl`: profit if sold at high
-- `missed_pnl`: difference (money left on table)
+### Exit Strategy Analysis
+Each trade tracks what you'd have made selling at the high vs holding to close:
+- `pnl`: actual profit (sold at close)
+- `optimal_pnl`: profit if sold at intraday high
+- `missed_pnl`: money left on table
 
-## Paper Trading Bot
-
-### Schedule (Pacific Time, Mon-Fri via cron)
-- **6:35 AM**: Screen S&P 500, pick top 5 (or fewer), mock buy at open price, print exit plan
-- **1:05 PM**: Record close prices + highs, calculate P/L + optimal P/L, run learning engine, sync to GitHub
-
-### Commands
-```bash
-python paper_trade.py buy       # Morning: pick & buy + exit plan
-python paper_trade.py close     # Afternoon: close & report P/L + missed gains
-python paper_trade.py history   # Show cumulative results
-```
-
-### Trade Storage (paper_trades.json)
-```json
-{
-  "trades": [
-    {
-      "date": "2026-05-07",
-      "ticker": "GOOG",
-      "open_price": 394.25,
-      "shares": 0.0507,
-      "invested": 20,
-      "close_price": 398.04,
-      "high_price": 400.10,
-      "pnl": 0.19,
-      "optimal_pnl": 0.30,
-      "missed_pnl": 0.11,
-      "confidence": "HIGH",
-      "composite_score": 72.2
-    }
-  ],
-  "summary": {
-    "total_invested": 100,
-    "total_pnl": 3.08,
-    "total_optimal_pnl": 4.49,
-    "days": 1
-  }
-}
-```
-
-## Learning Engine (`learn.py`)
-
-Runs daily after close. Produces:
-
-### 1. Performance Analysis
-- Win rate, profit factor, max drawdown
-- Per-confidence-level stats (does HIGH actually outperform LOW?)
-- Per-ticker stats (repeat winners/losers)
-- Per-score-bracket stats (does higher score = better results?)
+### Learning Engine
+After each day, analyzes:
+- Win rate by confidence level (is HIGH actually better?)
+- Win rate by score bracket (does higher score = better results?)
+- Repeat winners/losers (blocklist candidates)
 - Exit efficiency (% of possible gains captured)
+- Readiness to go live (20+ days, >60% win rate, profit factor >1.5, drawdown <10%)
 
-### 2. Auto-Generated Insights
-- Validates confidence scoring is working
-- Identifies best/worst score ranges
-- Flags repeat losers for blocklist
-- Highlights consistent winners
-- Detects win/loss size asymmetry
-- Tracks exit efficiency over time
+## Infrastructure
 
-### 3. Weight Adjustment Suggestions
-- If HIGH confidence underperforms → increase intraday weight
-- If low-score trades keep winning → lower minimum threshold
-- If high-score trades keep losing → rebalance technical vs pattern weights
+### AWS Resources (CDK managed)
+- **S3 Bucket:** `stock-trades-536697230325` (versioned, public read on trades/recs)
+- **Lambda Layer:** pandas, numpy, requests, beautifulsoup4, textblob, lxml
+- **IAM Role:** Lambda → S3 read/write only
+- **EventBridge Rules:** 7 scheduled triggers per weekday
 
-### 4. Readiness Report ("Can I go live with real money?")
-Must pass ALL criteria:
-- 20+ days traded
-- Win rate > 60%
-- Profit factor > 1.5
-- Max drawdown < 10%
+### Deployment
+```bash
+cd stock-recommender
+./deploy.sh          # Runs CDK deploy with elevatr profile
+```
 
-## CLI Screener Modes
+Or manually:
+```bash
+cd infra
+source .venv/bin/activate
+AWS_PROFILE=elevatr cdk deploy
+```
+
+### AWS Profile
+```
+Profile: elevatr
+Account: 536697230325
+Region: us-east-1
+```
+
+## Cost
+**$0/month** — fits entirely within AWS free tier + Polygon free tier.
+
+## Public URLs
+- **Dashboard:** https://aadiyaara.github.io/Stock_trade/
+- **Recommendations:** https://stock-trades-536697230325.s3.amazonaws.com/recommendations.json
+- **Trade History:** https://stock-trades-536697230325.s3.amazonaws.com/paper_trades.json
+
+## Local Development
 
 ```bash
-# Day trading mode (filters for intraday momentum)
+# Run screener manually (uses Polygon API)
 python main.py --daytrade
-
-# Swing/position mode (original, no intraday filter)
-python main.py
 
 # Specific tickers
 python main.py --tickers AAPL MSFT NVDA --daytrade
@@ -179,61 +192,21 @@ python main.py --tickers AAPL MSFT NVDA --daytrade
 # Skip news (faster)
 python main.py --no-news
 
-# Control output
-python main.py --top 50 --show 20
-
-# Exit strategy analysis
-python -m src.exit_strategy GOOG TSLA AMD
+# Paper trade locally
+python paper_trade.py buy
+python paper_trade.py close
+python paper_trade.py history
 ```
 
-## Dashboard
-
-### Local (real-time)
-```bash
-python dashboard.py   # → http://localhost:8501
-```
-
-### Shareable (GitHub Pages)
-Static HTML at `docs/index.html` reads `docs/paper_trades.json`.
-Auto-synced daily via `sync_dashboard.sh` after close.
-Friends visit: `https://USERNAME.github.io/stock-recommender`
-
-## Dependencies (all free/open-source)
-- yfinance: OHLC data from Yahoo Finance
-- pandas: Data manipulation
-- numpy: Numerical operations
-- pandas-ta: Technical analysis (available as fallback)
-- requests + beautifulsoup4: Web scraping (Finviz news, Wikipedia tickers)
-- textblob: NLP sentiment analysis
-- Chart.js (CDN): Dashboard charts
-
-## Candlestick Patterns Detected
-1. Doji
-2. Hammer
-3. Inverted hammer
-4. Bullish engulfing
-5. Piercing line
-6. Morning star
-7. Three white soldiers
-8. Bullish harami
-9. Tweezer bottom
-10. Dragonfly doji
-11. Rising three methods
-
-## Technical Indicators
-- RSI (14-period) — oversold bounce detection
-- MACD (12/26/9) — crossover and momentum
-- Bollinger Bands (20-period) — mean reversion near lower band
-- SMA 20/50/200 — trend alignment
-- Golden cross — 50 SMA crossing above 200 SMA
-- Volume surge — current vs 20-day average
-
-## Key Design Decisions
-1. **No TA-Lib dependency** — all patterns implemented in pure Python/pandas for easy install
-2. **Intraday filter** — prevents picking stocks that only move overnight (gap-and-fade)
-3. **Minimum threshold** — sits out on bad days rather than forcing trades
-4. **Multi-signal confluence** — higher confidence when multiple independent signals agree
-5. **Paper trading first** — no real money until strategy proves itself over 20+ days
-6. **Exit strategy** — tracks optimal exit vs actual, learns how much is left on table
-7. **Self-learning** — daily analysis of what works, suggests weight adjustments
-8. **Batch data download** — single yfinance API call for all 500 tickers (fast)
+## Technical Patterns Detected
+1. Doji — indecision, reversal signal
+2. Hammer — bullish reversal at support
+3. Inverted hammer — bullish reversal
+4. Bullish engulfing — strong reversal
+5. Piercing line — bullish reversal
+6. Morning star — 3-candle reversal
+7. Three white soldiers — strong continuation
+8. Bullish harami — inside bar reversal
+9. Tweezer bottom — double bottom
+10. Dragonfly doji — bullish at support
+11. Rising three methods — bullish continuation

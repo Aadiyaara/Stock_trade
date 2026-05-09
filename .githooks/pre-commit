@@ -1,0 +1,28 @@
+#!/bin/bash
+# Enforce KNOWLEDGE.md is updated with each commit
+# If you're changing code files, KNOWLEDGE.md must also be staged
+
+# Get list of staged files (excluding deletions)
+STAGED=$(git diff --cached --name-only --diff-filter=d)
+
+# Check if any code files are being committed
+CODE_CHANGED=$(echo "$STAGED" | grep -E '\.(py|yaml|sh|html)$' | grep -v '__pycache__')
+
+if [ -n "$CODE_CHANGED" ]; then
+    # Check if KNOWLEDGE.md is also staged
+    if ! echo "$STAGED" | grep -q "KNOWLEDGE.md"; then
+        echo ""
+        echo "ERROR: Code files changed but KNOWLEDGE.md not updated."
+        echo ""
+        echo "Changed files:"
+        echo "$CODE_CHANGED" | sed 's/^/  /'
+        echo ""
+        echo "Please update KNOWLEDGE.md to reflect your changes, then:"
+        echo "  git add KNOWLEDGE.md"
+        echo ""
+        echo "To skip this check (emergency only):"
+        echo "  git commit --no-verify"
+        echo ""
+        exit 1
+    fi
+fi
