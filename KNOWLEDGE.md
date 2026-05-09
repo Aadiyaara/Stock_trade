@@ -210,3 +210,207 @@ python paper_trade.py history
 9. Tweezer bottom — double bottom
 10. Dragonfly doji — bullish at support
 11. Rising three methods — bullish continuation
+
+---
+
+## How the Stock Picker Works — Step by Step (Beginner Guide)
+
+### Step 1: Get the list of stocks (`src/data_fetcher.py`)
+
+```
+"What stocks should we look at?"
+```
+
+- Goes to Wikipedia, grabs the table of all S&P 500 companies (503 tickers like AAPL, MSFT, GOOG...)
+- For each ticker, calls Polygon.io to download 1 year of daily price data:
+  - **Open** — price when market opened
+  - **High** — highest price that day
+  - **Low** — lowest price that day
+  - **Close** — price when market closed
+  - **Volume** — how many shares traded
+
+---
+
+### Step 2: Quick filter to top 50 (`src/screener.py` → `quick_bullish_rank`)
+
+```
+"Which of these 503 stocks look bullish at a glance?"
+```
+
+Simple checks (no heavy math):
+- Is price above its 50-day average? → good sign
+- Has it been going up the last 20 days? → momentum
+- Has it been going up the last 5 days? → recent strength
+- Is volume increasing? → people are interested
+
+Each stock gets a quick 0-100 score. Top 50 move to deep analysis.
+
+**Day trade extras:**
+- Did the stock just spike abnormally? → SKIP (it'll probably crash back)
+- Does it gap up then fade? → PENALTY (bad for day trading)
+
+---
+
+### Step 3: Technical indicators (`src/indicators.py`)
+
+```
+"What are the math-based signals saying?"
+```
+
+Runs 6 classic trading indicators on each stock:
+
+| Indicator | What it checks | Bullish when |
+|-----------|---------------|--------------|
+| **RSI** (Relative Strength Index) | Is it oversold? | RSI between 30-50 (bouncing back) |
+| **MACD** | Is momentum shifting up? | MACD line crosses above signal line |
+| **Bollinger Bands** | Is price near the bottom of its range? | Price near lower band (cheap) |
+| **Moving Averages** (20/50/200) | Is the trend up? | Price > 20-day > 50-day (aligned bullish) |
+| **Golden Cross** | Major trend shift? | 50-day crosses above 200-day |
+| **Volume** | Is today's volume abnormal? | Volume > 1.5× the 20-day average |
+
+Each signal that fires adds points. Output: **0-100 technical score**.
+
+---
+
+### Step 4: Candlestick patterns (`src/patterns.py`)
+
+```
+"Do the candle shapes suggest a reversal or continuation?"
+```
+
+Looks at the shape of the last 5 days of price candles. Each "candle" is one day's Open/High/Low/Close drawn as a bar.
+
+Detects 11 bullish patterns:
+
+| Pattern | What it looks like | What it means |
+|---------|--------------------|---------------|
+| **Hammer** | Small body, long lower shadow | Sellers tried to push down but buyers won |
+| **Bullish Engulfing** | Big green candle swallows previous red | Buyers overwhelmed sellers |
+| **Morning Star** | Red → tiny → green (3 days) | Reversal from downtrend |
+| **Three White Soldiers** | 3 consecutive green candles, each closing higher | Strong uptrend |
+| **Doji** | Tiny body (open ≈ close) | Indecision → potential reversal |
+
+Output: count of patterns found in last 5 days. More patterns = stronger signal.
+
+---
+
+### Step 5: News sentiment (`src/news_sentiment.py`)
+
+```
+"What's the news saying about this stock?"
+```
+
+1. Goes to Finviz.com, scrapes the 15 most recent headlines for the ticker
+2. Runs each headline through TextBlob (simple AI that scores text as positive/negative)
+3. Averages the scores: -1 (very negative) to +1 (very positive)
+4. Converts to a 0-20 scale for the composite score
+
+Example: "Apple reports record earnings" → positive → score 16/20
+
+---
+
+### Step 6: Intraday momentum (`src/screener.py` → `intraday_momentum_score`)
+
+```
+"Does this stock actually go UP during market hours, or does it just gap overnight?"
+```
+
+Looks at the last 10 days and asks:
+- **Win rate**: What % of days did close > open? (we want ≥60%)
+- **Gap-fade rate**: What % of days did it gap up at open then close lower? (we want ≤30%)
+- **Avg return**: What's the average open→close % gain?
+- **Overextended**: Did it just have an abnormal spike? (skip if yes)
+
+This prevents picking stocks like NVDA that gap up 3% overnight but then sell off all day — bad for day trading.
+
+---
+
+### Step 7: Combine scores (`src/screener.py` → `analyze_stock`)
+
+```
+"Put it all together — how bullish is this stock?"
+```
+
+Weighted formula (day trade mode):
+```
+Composite = (35% × Technical) + (20% × Patterns) + (10% × News) + (35% × Intraday)
+```
+
+Then assign confidence:
+- **HIGH** — 4+ signals fired + win rate ≥60% + gap-fade ≤30%
+- **MEDIUM** — 3+ signals + win rate ≥50%
+- **LOW** — not traded
+
+---
+
+### Step 8: Pick winners (`lambda/handler.py`)
+
+```
+"Which stocks do we actually trade?"
+```
+
+Filters:
+- Composite score ≥ 40
+- Confidence = HIGH or MEDIUM
+- Take top 5
+- Split $100 equally ($20 per stock)
+
+If nothing qualifies → sit out the day (cash is a position).
+
+---
+
+### Step 9: Track results (`src/exit_strategy.py` + `src/learn.py`)
+
+```
+"How did we do? Could we have done better?"
+```
+
+**Exit strategy** — for each stock, calculates:
+- What % does it typically run up from open? (avg open → high)
+- How much does it give back? (avg high → close)
+- Should you sell early (profit target) or hold to close?
+
+**Learning engine** — after 20+ days asks:
+- Win rate > 60%? ✅ or ❌
+- Profit factor > 1.5? (gross profit ÷ gross loss)
+- Max drawdown < 10%?
+- Are HIGH confidence picks actually beating LOW?
+- Which score ranges perform best?
+
+When all criteria pass → "Ready for real money."
+
+---
+
+### Visual Summary
+
+```
+Wikipedia (503 tickers)
+    │
+    ▼
+Polygon.io (1yr OHLC data)
+    │
+    ▼
+┌─────────────────────────────────┐
+│  Quick Screen (all 503)         │  → Top 50
+│  • Trend? Volume? Momentum?     │
+└─────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────┐
+│  Deep Analysis (top 50)         │
+│  ├── indicators.py  (35%)       │
+│  ├── patterns.py    (20%)       │  → Composite Score
+│  ├── news_sentiment (10%)       │
+│  └── intraday momentum (35%)    │
+└─────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────┐
+│  Filter                         │
+│  • Score ≥ 40                   │  → Top 5 picks
+│  • Confidence ≥ MEDIUM          │
+└─────────────────────────────────┘
+    │
+    ▼
+   BUY at open → CLOSE at end → LEARN from results
+```
