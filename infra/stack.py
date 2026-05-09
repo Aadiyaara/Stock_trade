@@ -87,10 +87,11 @@ class StockTraderStack(Stack):
             **shared_props,
         )
 
+        cache_props = {**shared_props, "timeout": Duration.minutes(10)}
         cache_fn = _lambda.Function(self, "BuildCache",
             function_name="stock-build-cache",
             handler="lambda/handler.build_cache",
-            **shared_props,
+            **cache_props,
         )
 
         bucket.grant_read_write(recommend_fn)
@@ -98,10 +99,10 @@ class StockTraderStack(Stack):
         bucket.grant_read_write(close_fn)
         bucket.grant_read_write(cache_fn)
 
-        # 3 cache runs: 1AM, 2AM, 3AM ET (5, 6, 7 UTC) — fetches ~60 tickers each
+        # Cache runs every 30min from 12AM-4AM ET (4-8 UTC) — 50 tickers/run × 10 runs = 500 tickers
         events.Rule(self, "CacheSchedule",
             rule_name="stock-build-cache",
-            schedule=events.Schedule.cron(minute="0", hour="5,6,7", week_day="MON-FRI"),
+            schedule=events.Schedule.cron(minute="0,30", hour="4,5,6,7,8", week_day="MON-FRI"),
             targets=[targets.LambdaFunction(cache_fn)],
         )
 

@@ -19,7 +19,7 @@ An automated paper trading system that:
 │                                                                     │
 │  EventBridge (cron)           Lambda (Python 3.12)        S3        │
 │  ─────────────────           ─────────────────────    ──────────    │
-│  1AM, 2AM, 3AM ──────────▶  stock-build-cache     ──▶ ohlc_cache  │
+│  Every 30m 12-4AM ET ────▶  stock-build-cache     ──▶ ohlc_cache  │
 │  4:30 AM ET    ──────────▶  stock-recommend       ──▶ recs.json   │
 │  9:35 AM ET    ──────────▶  stock-morning-buy     ──▶ trades.json │
 │  4:05 PM ET    ──────────▶  stock-close-and-learn ──▶ trades.json │

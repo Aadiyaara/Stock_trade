@@ -243,7 +243,8 @@ def build_cache(event, context):
     to_fetch = [t for t in tickers if t not in cache or cache[t].get("last_updated") != today]
 
     fetched = 0
-    for ticker in to_fetch[:20]:
+    max_fetch = 50
+    for ticker in to_fetch[:max_fetch]:
         if fetched > 0 and fetched % 5 == 0:
             time.sleep(RATE_LIMIT_DELAY)
         try:
