@@ -77,7 +77,15 @@
     }
 
     async function load() {
-        const resp = await fetch('paper_trades.json');
+        const bucket = 'stock-trades-536697230325';
+        const s3Url = `https://${bucket}.s3.amazonaws.com/paper_trades.json`;
+        let resp;
+        try {
+            resp = await fetch(s3Url);
+            if (!resp.ok) throw new Error('S3 unavailable');
+        } catch (e) {
+            resp = await fetch('paper_trades.json');
+        }
         const data = await resp.json();
         const trades = data.trades.filter(t => t.ticker !== 'CASH');
         const summary = data.summary;

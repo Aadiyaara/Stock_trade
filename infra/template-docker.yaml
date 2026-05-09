@@ -1,0 +1,155 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Stock Paper Trading Bot - Docker Lambda + EventBridge
+
+Parameters:
+  ImageUri:
+    Type: String
+    Description: ECR image URI for the Lambda function
+
+Resources:
+  TradesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "stock-trades-${AWS::AccountId}"
+      VersioningConfiguration:
+        Status: Enabled
+
+  TradingFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub "${TradesBucket.Arn}/*"
+
+  MorningBuyFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: stock-morning-buy
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUri
+      ImageConfig:
+        Command: ["lambda/handler.morning_buy"]
+      Role: !GetAtt TradingFunctionRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          TRADES_BUCKET: !Ref TradesBucket
+
+  AfternoonCloseFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: stock-afternoon-close
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUri
+      ImageConfig:
+        Command: ["lambda/handler.afternoon_close"]
+      Role: !GetAtt TradingFunctionRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          TRADES_BUCKET: !Ref TradesBucket
+
+  LearnFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: stock-learn
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUri
+      ImageConfig:
+        Command: ["lambda/handler.learn"]
+      Role: !GetAtt TradingFunctionRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          TRADES_BUCKET: !Ref TradesBucket
+
+  # EventBridge Rules
+  MorningSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: stock-morning-buy-schedule
+      Description: "9:35 AM ET Mon-Fri (market open + 5min)"
+      ScheduleExpression: "cron(35 13 ? * MON-FRI *)"
+      State: ENABLED
+      Targets:
+        - Id: MorningBuyTarget
+          Arn: !GetAtt MorningBuyFunction.Arn
+
+  AfternoonSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: stock-afternoon-close-schedule
+      Description: "4:05 PM ET Mon-Fri (market close + 5min)"
+      ScheduleExpression: "cron(5 20 ? * MON-FRI *)"
+      State: ENABLED
+      Targets:
+        - Id: AfternoonCloseTarget
+          Arn: !GetAtt AfternoonCloseFunction.Arn
+
+  LearnSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: stock-learn-schedule
+      Description: "4:30 PM ET Mon-Fri (after close)"
+      ScheduleExpression: "cron(30 20 ? * MON-FRI *)"
+      State: ENABLED
+      Targets:
+        - Id: LearnTarget
+          Arn: !GetAtt LearnFunction.Arn
+
+  # Permissions for EventBridge to invoke Lambda
+  MorningBuyPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref MorningBuyFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt MorningSchedule.Arn
+
+  AfternoonClosePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AfternoonCloseFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt AfternoonSchedule.Arn
+
+  LearnPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LearnFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt LearnSchedule.Arn
+
+Outputs:
+  TradesBucketName:
+    Value: !Ref TradesBucket
+  MorningBuyArn:
+    Value: !GetAtt MorningBuyFunction.Arn
+  AfternoonCloseArn:
+    Value: !GetAtt AfternoonCloseFunction.Arn
+  LearnArn:
+    Value: !GetAtt LearnFunction.Arn
