@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paper Trading Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; padding: 20px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .header h1 { font-size: 2em; color: #4fc3f7; }
+        .header p { color: #888; margin-top: 5px; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; margin-bottom: 30px; }
+        .stat-card { background: #16213e; border-radius: 12px; padding: 20px; text-align: center; }
+        .stat-card .value { font-size: 1.8em; font-weight: bold; margin: 8px 0; }
+        .stat-card .label { color: #888; font-size: 0.85em; text-transform: uppercase; }
+        .chart-container { background: #16213e; border-radius: 12px; padding: 20px; margin-bottom: 30px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #2a2a4a; font-size: 0.9em; }
+        th { color: #4fc3f7; font-size: 0.8em; text-transform: uppercase; }
+        .table-container { background: #16213e; border-radius: 12px; padding: 20px; margin-bottom: 30px; overflow-x: auto; }
+        .table-container h2 { margin-bottom: 15px; color: #4fc3f7; }
+        .green { color: #4caf50; font-weight: bold; }
+        .red { color: #f44336; font-weight: bold; }
+        .orange { color: #ff9800; font-weight: bold; }
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75em; }
+        .tag-hit { background: #1b5e20; color: #a5d6a7; }
+        .tag-missed { background: #4a1c1c; color: #ef9a9a; }
+        .tag-held { background: #33333a; color: #bbb; }
+        .refresh { position: fixed; bottom: 20px; right: 20px; background: #4fc3f7; color: #1a1a2e; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .refresh:hover { background: #81d4fa; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📈 Paper Trading Dashboard</h1>
+        <p>Mock $100/day • Top 5 S&P 500 Day Trades • Auto-updated daily</p>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="chart-container"><canvas id="pnlChart" height="80"></canvas></div>
+    <div class="table-container">
+        <h2>Trade History (with Exit Analysis)</h2>
+        <table><thead><tr>
+            <th>Date</th><th>Ticker</th><th>Open</th><th>High</th><th>Close</th>
+            <th>Target</th><th>Stop</th><th>Best Exit</th><th>Actual P/L</th><th>Optimal P/L</th><th>Conf</th>
+        </tr></thead>
+        <tbody id="trades-body"></tbody></table>
+    </div>
+
+    <button class="refresh" onclick="location.reload()">↻ Refresh</button>
+
+    <script>
+    // Exit strategy params (approximate from historical analysis)
+    const EXIT_PARAMS = {
+        default: { target_pct: 1.2, stop_pct: 0.9 }
+    };
+
+    function getExitPrices(open) {
+        const target = open * (1 + EXIT_PARAMS.default.target_pct / 100);
+        const stop = open * (1 - EXIT_PARAMS.default.stop_pct / 100);
+        return { target: target, stop: stop };
+    }
+
+    function getBestExit(open, high, close, low) {
+        const exits = getExitPrices(open);
+        // Did it hit profit target?
+        if (high >= exits.target) {
+            return { price: exits.target, label: 'TARGET HIT', cls: 'tag-hit' };
+        }
+        // Did it hit stop loss? (using low as proxy)
+        if (low && low <= exits.stop) {
+            return { price: exits.stop, label: 'STOPPED', cls: 'tag-missed' };
+        }
+        // Held to close
+        return { price: close, label: 'HELD', cls: 'tag-held' };
+    }
+
+    async function load() {
+        const resp = await fetch('paper_trades.json');
+        const data = await resp.json();
+        const trades = data.trades.filter(t => t.ticker !== 'CASH');
+        const summary = data.summary;
+
+        // Group by date
+        const byDate = {};
+        trades.forEach(t => { (byDate[t.date] = byDate[t.date] || []).push(t); });
+        const dates = Object.keys(byDate).sort();
+
+        // Chart data
+        let running = 0;
+        const daily = [], cumulative = [], optimalCum = [];
+        let optRunning = 0;
+        dates.forEach(d => {
+            const dayPl = byDate[d].reduce((s, t) => s + (t.pnl || 0), 0);
+            const dayOpt = byDate[d].reduce((s, t) => s + (t.optimal_pnl || 0), 0);
+            running += dayPl;
+            optRunning += dayOpt;
+            daily.push(+dayPl.toFixed(2));
+            cumulative.push(+running.toFixed(2));
+            optimalCum.push(+optRunning.toFixed(2));
+        });
+
+        // Stats
+        const winDays = dates.filter(d => byDate[d].reduce((s,t) => s+(t.pnl||0), 0) > 0).length;
+        const totalDays = summary.days || dates.length;
+        const winRate = totalDays > 0 ? (winDays / totalDays * 100).toFixed(0) : 0;
+        const avgDaily = totalDays > 0 ? (summary.total_pnl / totalDays).toFixed(2) : 0;
+        const pnlColor = summary.total_pnl >= 0 ? '#4caf50' : '#f44336';
+        const leftOnTable = ((summary.total_optimal_pnl || 0) - summary.total_pnl).toFixed(2);
+
+        document.getElementById('stats').innerHTML = `
+            <div class="stat-card"><div class="label">Total P/L</div><div class="value" style="color:${pnlColor}">$${summary.total_pnl >= 0 ? '+' : ''}${summary.total_pnl.toFixed(2)}</div></div>
+            <div class="stat-card"><div class="label">Days Traded</div><div class="value">${totalDays}</div></div>
+            <div class="stat-card"><div class="label">Win Rate</div><div class="value">${winRate}%</div></div>
+            <div class="stat-card"><div class="label">Avg Daily</div><div class="value" style="color:${avgDaily >= 0 ? '#4caf50' : '#f44336'}">$${avgDaily >= 0 ? '+' : ''}${avgDaily}</div></div>
+            <div class="stat-card"><div class="label">Left on Table</div><div class="value" style="color:#ff9800">$${leftOnTable}</div></div>
+            <div class="stat-card"><div class="label">Invested</div><div class="value">$${summary.total_invested}</div></div>
+        `;
+
+        // Table
+        let rows = '';
+        dates.slice().reverse().forEach(d => {
+            byDate[d].forEach(t => {
+                const pnl = t.pnl !== null ? t.pnl : null;
+                const pnlStr = pnl !== null ? `$${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}` : 'OPEN';
+                const pnlCls = pnl > 0 ? 'green' : pnl < 0 ? 'red' : '';
+                
+                const optPnl = t.optimal_pnl !== null && t.optimal_pnl !== undefined ? `$${t.optimal_pnl >= 0 ? '+' : ''}${t.optimal_pnl.toFixed(2)}` : '—';
+                const optCls = t.optimal_pnl > 0 ? 'green' : '';
+
+                const exits = getExitPrices(t.open_price);
+                const high = t.high_price || t.close_price || t.open_price;
+                const low = t.low_price || (t.close_price < t.open_price ? t.close_price : t.open_price);
+                const best = getBestExit(t.open_price, high, t.close_price || t.open_price, low);
+
+                rows += `<tr>
+                    <td>${t.date}</td>
+                    <td><strong>${t.ticker}</strong></td>
+                    <td>$${t.open_price.toFixed(2)}</td>
+                    <td>${t.high_price ? '$'+t.high_price.toFixed(2) : '—'}</td>
+                    <td>${t.close_price ? '$'+t.close_price.toFixed(2) : '—'}</td>
+                    <td class="green">$${exits.target.toFixed(2)}</td>
+                    <td class="red">$${exits.stop.toFixed(2)}</td>
+                    <td><span class="tag ${best.cls}">${best.label}</span> $${best.price.toFixed(2)}</td>
+                    <td class="${pnlCls}">${pnlStr}</td>
+                    <td class="${optCls}">${optPnl}</td>
+                    <td>${t.confidence}</td>
+                </tr>`;
+            });
+        });
+        document.getElementById('trades-body').innerHTML = rows;
+
+        // Chart
+        new Chart(document.getElementById('pnlChart'), {
+            type: 'line',
+            data: {
+                labels: dates,
+                datasets: [
+                    { label: 'Actual Cumulative P/L', data: cumulative, borderColor: '#4fc3f7', backgroundColor: 'rgba(79,195,247,0.1)', fill: true, tension: 0.3 },
+                    { label: 'Optimal P/L (sold at high)', data: optimalCum, borderColor: '#4caf50', borderDash: [5,5], fill: false, tension: 0.3 },
+                    { label: 'Daily P/L', data: daily, borderColor: '#ff9800', fill: false, tension: 0.3 }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { labels: { color: '#eee' } } },
+                scales: {
+                    x: { ticks: { color: '#888' }, grid: { color: '#2a2a4a' } },
+                    y: { ticks: { color: '#888', callback: v => '$' + v }, grid: { color: '#2a2a4a' } }
+                }
+            }
+        });
+    }
+    load();
+    </script>
+</body>
+</html>

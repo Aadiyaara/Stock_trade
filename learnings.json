@@ -1,0 +1,262 @@
+{
+  "weight_adjustments": {},
+  "insights": [
+    "\u2705 Best performing score range: 55-70 (avg P/L: $+0.22)",
+    "\u26a0\ufe0f Worst score range: 70-85 (avg P/L: $-0.08) \u2014 consider raising minimum threshold",
+    "\ud83d\udfe1 Profit factor 1.33 \u2014 marginal. Need more edge.",
+    "\ud83d\udcca Exit efficiency: 15% (capturing 15% of possible gains)",
+    "\u26a0\ufe0f Leaving too much on table \u2014 trailing stop would help capture more of the move"
+  ],
+  "performance": {
+    "status": "OK",
+    "_raw_trades": [
+      {
+        "date": "2026-05-07",
+        "ticker": "AMD",
+        "open_price": 417.2,
+        "shares": 0.047939,
+        "invested": 20.0,
+        "close_price": 408.35,
+        "high_price": 421.7,
+        "pnl": -0.42,
+        "optimal_pnl": 0.22,
+        "missed_pnl": 0.64,
+        "confidence": "HIGH",
+        "composite_score": 72.0
+      },
+      {
+        "date": "2026-05-07",
+        "ticker": "DOC",
+        "open_price": 19.5,
+        "shares": 1.025641,
+        "invested": 20.0,
+        "close_price": 19.65,
+        "high_price": 19.66,
+        "pnl": 0.15,
+        "optimal_pnl": 0.16,
+        "missed_pnl": 0.01,
+        "confidence": "HIGH",
+        "composite_score": 72.0
+      },
+      {
+        "date": "2026-05-07",
+        "ticker": "GOOGL",
+        "open_price": 399.99,
+        "shares": 0.050001,
+        "invested": 20.0,
+        "close_price": 398.03,
+        "high_price": 400.1,
+        "pnl": -0.1,
+        "optimal_pnl": 0.01,
+        "missed_pnl": 0.1,
+        "confidence": "HIGH",
+        "composite_score": 72.0
+      },
+      {
+        "date": "2026-05-07",
+        "ticker": "GOOG",
+        "open_price": 397.17,
+        "shares": 0.050356,
+        "invested": 20.0,
+        "close_price": 395.29,
+        "high_price": 397.28,
+        "pnl": -0.09,
+        "optimal_pnl": 0.01,
+        "missed_pnl": 0.1,
+        "confidence": "HIGH",
+        "composite_score": 72.0
+      },
+      {
+        "date": "2026-05-07",
+        "ticker": "FIX",
+        "open_price": 2002.0,
+        "shares": 0.00999,
+        "invested": 20.0,
+        "close_price": 1941.99,
+        "high_price": 2002.0,
+        "pnl": -0.6,
+        "optimal_pnl": 0.0,
+        "missed_pnl": 0.6,
+        "confidence": "HIGH",
+        "composite_score": 72.0
+      },
+      {
+        "date": "2026-05-08",
+        "ticker": "CBOE",
+        "open_price": 338.2,
+        "shares": 0.059137,
+        "invested": 20.0,
+        "close_price": 348.15,
+        "pnl": 0.59,
+        "confidence": "HIGH",
+        "composite_score": 72.2,
+        "high_price": 349.39,
+        "optimal_pnl": 0.66,
+        "missed_pnl": 0.07
+      },
+      {
+        "date": "2026-05-08",
+        "ticker": "ORCL",
+        "open_price": 192.58,
+        "shares": 0.103853,
+        "invested": 20.0,
+        "close_price": 195.94,
+        "pnl": 0.35,
+        "confidence": "MEDIUM",
+        "composite_score": 68.8,
+        "high_price": 198.0,
+        "optimal_pnl": 0.56,
+        "missed_pnl": 0.21
+      },
+      {
+        "date": "2026-05-08",
+        "ticker": "CNC",
+        "open_price": 55.2,
+        "shares": 0.362319,
+        "invested": 20.0,
+        "close_price": 55.96,
+        "pnl": 0.27,
+        "confidence": "HIGH",
+        "composite_score": 68.8,
+        "high_price": 56.35,
+        "optimal_pnl": 0.42,
+        "missed_pnl": 0.14
+      },
+      {
+        "date": "2026-05-08",
+        "ticker": "MPC",
+        "open_price": 242.2,
+        "shares": 0.082576,
+        "invested": 20.0,
+        "close_price": 244.97,
+        "pnl": 0.23,
+        "confidence": "HIGH",
+        "composite_score": 68.8,
+        "high_price": 247.88,
+        "optimal_pnl": 0.47,
+        "missed_pnl": 0.24
+      },
+      {
+        "date": "2026-05-08",
+        "ticker": "ADM",
+        "open_price": 77.57,
+        "shares": 0.257848,
+        "invested": 20.0,
+        "close_price": 77.65,
+        "pnl": 0.02,
+        "confidence": "HIGH",
+        "composite_score": 68.7,
+        "high_price": 78.29,
+        "optimal_pnl": 0.19,
+        "missed_pnl": 0.17
+      }
+    ],
+    "days_traded": 2,
+    "total_trades": 10,
+    "win_rate": 60.0,
+    "profit_factor": 1.33,
+    "max_drawdown_pct": 0.53,
+    "gross_profit": 1.61,
+    "gross_loss": 1.21,
+    "avg_winner": 0.27,
+    "avg_loser": 0.3,
+    "confidence_stats": {
+      "HIGH": {
+        "count": 9,
+        "win_rate": 55.55555555555556,
+        "avg_pnl": 0.005555555555555559
+      },
+      "MEDIUM": {
+        "count": 1,
+        "win_rate": 100.0,
+        "avg_pnl": 0.35
+      }
+    },
+    "ticker_stats": {
+      "AMD": {
+        "trades": 1,
+        "win_rate": 0.0,
+        "total_pnl": -0.42,
+        "avg_score": 72.0
+      },
+      "DOC": {
+        "trades": 1,
+        "win_rate": 100.0,
+        "total_pnl": 0.15,
+        "avg_score": 72.0
+      },
+      "GOOGL": {
+        "trades": 1,
+        "win_rate": 0.0,
+        "total_pnl": -0.1,
+        "avg_score": 72.0
+      },
+      "GOOG": {
+        "trades": 1,
+        "win_rate": 0.0,
+        "total_pnl": -0.09,
+        "avg_score": 72.0
+      },
+      "FIX": {
+        "trades": 1,
+        "win_rate": 0.0,
+        "total_pnl": -0.6,
+        "avg_score": 72.0
+      },
+      "CBOE": {
+        "trades": 1,
+        "win_rate": 100.0,
+        "total_pnl": 0.59,
+        "avg_score": 72.2
+      },
+      "ORCL": {
+        "trades": 1,
+        "win_rate": 100.0,
+        "total_pnl": 0.35,
+        "avg_score": 68.8
+      },
+      "CNC": {
+        "trades": 1,
+        "win_rate": 100.0,
+        "total_pnl": 0.27,
+        "avg_score": 68.8
+      },
+      "MPC": {
+        "trades": 1,
+        "win_rate": 100.0,
+        "total_pnl": 0.23,
+        "avg_score": 68.8
+      },
+      "ADM": {
+        "trades": 1,
+        "win_rate": 100.0,
+        "total_pnl": 0.02,
+        "avg_score": 68.7
+      }
+    },
+    "bracket_stats": {
+      "55-70": {
+        "count": 4,
+        "win_rate": 100.0,
+        "avg_pnl": 0.2175
+      },
+      "70-85": {
+        "count": 6,
+        "win_rate": 33.33333333333333,
+        "avg_pnl": -0.07833333333333332
+      }
+    }
+  },
+  "readiness": {
+    "ready": false,
+    "progress": "2/4 criteria met",
+    "details": {
+      "Days traded (20 needed)": "2 \u274c",
+      "Win rate (>60.0%)": "60.0% \u2705",
+      "Profit factor (>1.5)": "1.33 \u274c",
+      "Max drawdown (<10.0%)": "0.53% \u2705"
+    },
+    "verdict": "\ud83d\udd34 NOT READY \u2014 Keep paper trading until all criteria are met."
+  },
+  "last_updated": "2026-05-08T13:05:05.435679"
+}

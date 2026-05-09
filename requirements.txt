@@ -1,0 +1,7 @@
+yfinance>=0.2.31
+pandas>=2.0.0
+pandas-ta>=0.3.14b
+numpy>=1.24.0
+requests>=2.31.0
+textblob>=0.17.1
+beautifulsoup4>=4.12.0
