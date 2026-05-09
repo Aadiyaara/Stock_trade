@@ -1,3 +1,38 @@
+import sys
+import types
+import requests as _requests
+
+# yfinance requires curl_cffi for browser impersonation but we can use plain requests.
+_cffi = types.ModuleType("curl_cffi")
+_cffi_req = types.ModuleType("curl_cffi.requests")
+
+
+class _CffiSession(_requests.Session):
+    def __init__(self, *args, **kwargs):
+        kwargs.pop("impersonate", None)
+        kwargs.pop("browser_type", None)
+        super().__init__()
+        self.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+        })
+
+
+_cffi_req.Session = _CffiSession
+_cffi_req.Response = _requests.Response
+_cffi_req.BrowserType = type("BrowserType", (), {"chrome": "chrome"})
+
+_cffi_session = types.ModuleType("curl_cffi.requests.session")
+_cffi_session.Session = _CffiSession
+_cffi_req.session = _cffi_session
+
+_cffi.requests = _cffi_req
+_cffi.CurlHttpVersion = type("CurlHttpVersion", (), {"V2_0": 2})
+sys.modules["curl_cffi"] = _cffi
+sys.modules["curl_cffi.requests"] = _cffi_req
+sys.modules["curl_cffi.requests.session"] = _cffi_session
+
 import json
 import os
 import boto3
@@ -52,15 +87,36 @@ def morning_buy(event, context):
 
     picked_tickers = [r["ticker"] for r in top]
     live_prices = {}
-    intraday = yf.download(picked_tickers, period="1d", interval="1m", progress=False)
-    for ticker in picked_tickers:
+    try:
+        intraday = yf.download(picked_tickers, period="1d", interval="1m", progress=False)
+        for ticker in picked_tickers:
+            try:
+                if len(picked_tickers) == 1:
+                    live_prices[ticker] = float(intraday["Open"].iloc[0])
+                else:
+                    live_prices[ticker] = float(intraday["Open"][ticker].iloc[0])
+            except (KeyError, IndexError):
+                pass
+    except (ValueError, KeyError):
+        pass
+
+    # Fallback: use daily open if intraday not available
+    if not live_prices:
         try:
-            if len(picked_tickers) == 1:
-                live_prices[ticker] = float(intraday["Open"].iloc[0])
-            else:
-                live_prices[ticker] = float(intraday["Open"][ticker].iloc[0])
-        except (KeyError, IndexError):
+            daily = yf.download(picked_tickers, period="5d", progress=False)
+            for ticker in picked_tickers:
+                try:
+                    if len(picked_tickers) == 1:
+                        live_prices[ticker] = float(daily["Open"].iloc[-1])
+                    else:
+                        live_prices[ticker] = float(daily["Open"][ticker].iloc[-1])
+                except (KeyError, IndexError):
+                    pass
+        except (ValueError, KeyError):
             pass
+
+    if not live_prices:
+        return {"statusCode": 200, "body": "Market data unavailable — likely outside trading hours"}
 
     qualified = [r for r in top if r["composite_score"] >= MIN_SCORE and r["confidence"] in ("HIGH", "MEDIUM")]
 
