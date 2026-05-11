@@ -146,31 +146,14 @@ def fetch_current_prices(tickers: list[str]) -> dict[str, float]:
                 results = resp.json().get("results", [])
                 if results:
                     prices[ticker] = float(results[0]["c"])
-        except Exception:
+            else:
+                print(f"[fetch_current_prices] {ticker}: status {resp.status_code}")
+        except Exception as e:
+            print(f"[fetch_current_prices] {ticker}: exception {e}")
             continue
     return prices
 
 
 def fetch_open_price(tickers: list[str]) -> dict[str, float]:
-    """Get today's open price via 1-min aggs, fallback to prev close."""
-    prices = {}
-    today = datetime.now().strftime("%Y-%m-%d")
-    for i, ticker in enumerate(tickers):
-        if i > 0 and i % 5 == 0:
-            time.sleep(RATE_LIMIT_DELAY)
-        try:
-            url = f"{BASE_URL}/v2/aggs/ticker/{ticker}/range/1/minute/{today}/{today}"
-            resp = requests.get(url, params={"adjusted": "true", "sort": "asc", "limit": 1, "apiKey": POLYGON_KEY}, timeout=10)
-            if resp.status_code == 200:
-                results = resp.json().get("results", [])
-                if results:
-                    prices[ticker] = float(results[0]["o"])
-        except Exception:
-            continue
-
-    # Fallback: previous close for any missing
-    missing = [t for t in tickers if t not in prices]
-    if missing:
-        prev = fetch_current_prices(missing)
-        prices.update(prev)
-    return prices
+    """Get previous close as proxy for open price (Polygon free tier has no intraday)."""
+    return fetch_current_prices(tickers)
