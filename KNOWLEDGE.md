@@ -84,7 +84,7 @@ stock-recommender/
 
 ### `stock-close-and-learn` — Close + Analysis
 - **Trigger:** 4:05 PM ET (Mon-Fri, 5 min after market close)
-- **What:** Fetches close/high prices, calculates P/L, runs learning engine
+- **What:** Fetches close/high prices (falls back to /prev on free tier), calculates P/L, runs learning engine
 - **Output:** Updates `paper_trades.json` and `learnings.json` in S3
 
 ## Scoring System

@@ -171,12 +171,22 @@ def close_and_learn(event, context):
         day_bars = {}
         for ticker in tickers:
             try:
+                # Try today's daily bar first
                 url = f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{today}/{today}"
                 resp = _req.get(url, params={"adjusted": "true", "apiKey": POLYGON_KEY}, timeout=10)
                 if resp.status_code == 200:
                     results = resp.json().get("results", [])
                     if results:
                         day_bars[ticker] = results[0]
+                        continue
+                # Fallback: use prev close as today's close (free tier)
+                url = f"https://api.polygon.io/v2/aggs/ticker/{ticker}/prev"
+                resp = _req.get(url, params={"adjusted": "true", "apiKey": POLYGON_KEY}, timeout=10)
+                if resp.status_code == 200:
+                    results = resp.json().get("results", [])
+                    if results:
+                        bar = results[0]
+                        day_bars[ticker] = {"o": bar["o"], "c": bar["c"], "h": bar["h"], "l": bar["l"]}
             except Exception:
                 continue
 
