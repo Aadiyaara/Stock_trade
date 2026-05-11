@@ -198,7 +198,6 @@ def morning_buy(event, context):
 
 def close_and_learn(event, context):
     """Runs after market close: records P/L and runs learning analysis."""
-    import requests as _req
     today = date.today().isoformat()
     trades = load_trades()
 
@@ -209,42 +208,13 @@ def close_and_learn(event, context):
     day_optimal = 0
     if today_trades:
         tickers = [t["ticker"] for t in today_trades]
-        day_bars = {}
-        for ticker in tickers:
-            try:
-                # Try today's daily bar first
-                url = f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{today}/{today}"
-                resp = _req.get(url, params={"adjusted": "true", "apiKey": POLYGON_KEY}, timeout=10)
-                if resp.status_code == 200:
-                    results = resp.json().get("results", [])
-                    if results:
-                        day_bars[ticker] = results[0]
-                        continue
-                # Fallback: use prev close as today's close (free tier)
-                url = f"https://api.polygon.io/v2/aggs/ticker/{ticker}/prev"
-                resp = _req.get(url, params={"adjusted": "true", "apiKey": POLYGON_KEY}, timeout=10)
-                if resp.status_code == 200:
-                    results = resp.json().get("results", [])
-                    if results:
-                        bar = results[0]
-                        day_bars[ticker] = {"o": bar["o"], "c": bar["c"], "h": bar["h"], "l": bar["l"]}
-            except Exception:
-                continue
+        close_prices, _ = _fetch_finnhub_quotes(tickers)
+        print(f"Close prices from Finnhub: {close_prices}")
 
         for t in today_trades:
             ticker = t["ticker"]
-            bar = day_bars.get(ticker)
-            if bar:
-                actual_open = float(bar["o"])
-                if actual_open > 0 and abs(actual_open - t["open_price"]) / t["open_price"] > 0.001:
-                    t["open_price"] = round(actual_open, 2)
-                    t["shares"] = t["invested"] / actual_open
-
-        for t in today_trades:
-            ticker = t["ticker"]
-            bar = day_bars.get(ticker, {})
-            close_price = float(bar.get("c", t["open_price"]))
-            high_price = float(bar.get("h", t["open_price"]))
+            close_price = close_prices.get(ticker, t["open_price"])
+            high_price = close_price
 
             pnl = t["shares"] * (close_price - t["open_price"])
             optimal_pnl = t["shares"] * (high_price - t["open_price"])

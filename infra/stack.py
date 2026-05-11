@@ -87,7 +87,10 @@ class StockTraderStack(Stack):
         close_fn = _lambda.Function(self, "CloseAndLearn",
             function_name="stock-close-and-learn",
             handler="lambda/handler.close_and_learn",
-            **shared_props,
+            **{**shared_props, "environment": {
+                **shared_props["environment"],
+                "FINNHUB_API_KEY": "d28r241r01qle9gs976gd28r241r01qle9gs9770",
+            }},
         )
 
         cache_props = {**shared_props, "timeout": Duration.minutes(10)}
