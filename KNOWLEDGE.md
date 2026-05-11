@@ -77,7 +77,7 @@ stock-recommender/
 
 ### `stock-morning-buy` — Trade Executor
 - **Trigger:** 9:35 AM ET (Mon-Fri, 5 min after market open)
-- **What:** Reads recommendations.json from S3, fetches prev close as entry price (free tier has no intraday), records paper buy
+- **What:** Reads recommendations.json from S3, fetches real-time price via Finnhub, records paper buy
 - **Design:** Does NOT re-run analysis — uses pre-computed recs to avoid Polygon rate limits
 - **Output:** Updates `paper_trades.json` in S3
 - **Budget:** $100/day split across qualified picks ($20 each if 5 qualify)

@@ -78,7 +78,10 @@ class StockTraderStack(Stack):
         morning_fn = _lambda.Function(self, "MorningBuy",
             function_name="stock-morning-buy",
             handler="lambda/handler.morning_buy",
-            **shared_props,
+            **{**shared_props, "environment": {
+                **shared_props["environment"],
+                "FINNHUB_API_KEY": "d28r241r01qle9gs976gd28r241r01qle9gs9770",
+            }},
         )
 
         close_fn = _lambda.Function(self, "CloseAndLearn",

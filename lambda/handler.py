@@ -1,6 +1,7 @@
 import json
 import os
 import boto3
+import requests as _req
 from datetime import datetime, date, timedelta
 from src.data_fetcher import get_sp500_tickers, fetch_ohlc, fetch_ohlc_cached, fetch_open_price, fetch_current_prices
 from src.screener import run_full_analysis
@@ -10,6 +11,7 @@ from src.learn import analyze_performance, generate_insights, suggest_weight_adj
 s3 = boto3.client("s3")
 BUCKET = os.environ["TRADES_BUCKET"]
 POLYGON_KEY = os.environ.get("POLYGON_API_KEY", "DT3pw8H1EFAcMF8LtysDQwOMfmtyAzqO")
+FINNHUB_KEY = os.environ.get("FINNHUB_API_KEY", "")
 TRADES_KEY = "paper_trades.json"
 LEARNINGS_KEY = "learnings.json"
 DASHBOARD_KEY = "docs/paper_trades.json"
@@ -90,6 +92,23 @@ def pre_market_recommend(event, context):
     return {"statusCode": 200, "body": f"Recommendations for {today}: {', '.join(ticker_list) or 'NONE'}"}
 
 
+def _fetch_finnhub_quotes(tickers: list[str]) -> dict[str, float]:
+    """Get real-time quotes from Finnhub (60 calls/min free tier)."""
+    prices = {}
+    for ticker in tickers:
+        try:
+            resp = _req.get("https://finnhub.io/api/v1/quote",
+                            params={"symbol": ticker, "token": FINNHUB_KEY}, timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                price = data.get("c", 0)
+                if price > 0:
+                    prices[ticker] = price
+        except Exception as e:
+            print(f"[finnhub] {ticker}: {e}")
+    return prices
+
+
 def morning_buy(event, context):
     today = date.today().isoformat()
     trades = load_trades()
@@ -110,7 +129,7 @@ def morning_buy(event, context):
     top = recs["picks"][:TOP_PICKS]
     picked_tickers = [r["ticker"] for r in top]
     print(f"Fetching live prices for: {picked_tickers}")
-    live_prices = fetch_open_price(picked_tickers)
+    live_prices = _fetch_finnhub_quotes(picked_tickers)
     print(f"Live prices: {live_prices}")
 
     if not live_prices:
