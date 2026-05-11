@@ -63,11 +63,11 @@ stock-recommender/
 ## Lambda Functions
 
 ### `stock-build-cache` — Data Collector
-- **Trigger:** 1:00 AM, 2:00 AM, 3:00 AM ET (Mon-Fri)
-- **What:** Fetches 1-year daily OHLC from Polygon.io for ~60 tickers per run
-- **Why:** Polygon free tier limits to 5 calls/min. 3 runs × 60 = ~180 tickers cached daily
+- **Trigger:** Every 30 min from 12:00-4:00 AM ET (Mon-Fri) = 10 runs
+- **What:** Fetches 1-year daily OHLC from Polygon.io for 50 tickers per run
+- **Why:** Polygon free tier limits to 5 calls/min. 10 runs × 50 = 500 tickers cached daily
 - **Output:** `s3://stock-trades-536697230325/cache/ohlc_cache.json`
-- **Note:** Cache accumulates over days. After ~3 days all 503 S&P tickers are fresh
+- **Timeout:** 10 minutes
 
 ### `stock-recommend` — Pre-Market Screener
 - **Trigger:** 4:30 AM ET (Mon-Fri)
@@ -77,7 +77,8 @@ stock-recommender/
 
 ### `stock-morning-buy` — Trade Executor
 - **Trigger:** 9:35 AM ET (Mon-Fri, 5 min after market open)
-- **What:** Gets actual open price from Polygon (1-min bars), records paper buy
+- **What:** Reads recommendations.json from S3, fetches live open prices from Polygon, records paper buy
+- **Design:** Does NOT re-run analysis — uses pre-computed recs to avoid Polygon rate limits
 - **Output:** Updates `paper_trades.json` in S3
 - **Budget:** $100/day split across qualified picks ($20 each if 5 qualify)
 

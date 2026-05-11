@@ -97,13 +97,21 @@ def morning_buy(event, context):
     if any(t["date"] == today and t.get("open_price") for t in trades["trades"]):
         return {"statusCode": 200, "body": f"Already have picks for {today}"}
 
-    tickers = get_sp500_tickers()
-    ohlc_data = fetch_ohlc_cached(tickers, s3_client=s3, bucket=BUCKET)
-    results = run_full_analysis(ohlc_data, top_n=50, include_news=False, daytrade_mode=True)
-    top = results[:TOP_PICKS]
+    # Read pre-computed recommendations instead of re-running analysis
+    try:
+        obj = s3.get_object(Bucket=BUCKET, Key="recommendations.json")
+        recs = json.loads(obj["Body"].read())
+    except Exception:
+        return {"statusCode": 200, "body": "No recommendations found — run stock-recommend first"}
 
+    if recs.get("date") != today:
+        return {"statusCode": 200, "body": f"Stale recommendations (from {recs.get('date')}), skipping"}
+
+    top = recs["picks"][:TOP_PICKS]
     picked_tickers = [r["ticker"] for r in top]
+    print(f"Fetching live prices for: {picked_tickers}")
     live_prices = fetch_open_price(picked_tickers)
+    print(f"Live prices: {live_prices}")
 
     if not live_prices:
         return {"statusCode": 200, "body": "Market data unavailable"}
