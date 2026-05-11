@@ -71,14 +71,14 @@ stock-recommender/
 
 ### `stock-recommend` — Pre-Market Screener
 - **Trigger:** 4:30 AM ET (Mon-Fri)
-- **What:** Screens cached OHLC data, picks top 5 qualified stocks, includes prev close as reference price
+- **What:** Screens cached OHLC data, picks top 10 qualified stocks with prev close as reference
 - **Output:** `s3://stock-trades-536697230325/recommendations.json` (public)
 - **Qualification:** composite score ≥ 40 AND confidence ≥ MEDIUM
 
 ### `stock-morning-buy` — Trade Executor
 - **Trigger:** 9:35 AM ET (Mon-Fri, 5 min after market open)
-- **What:** Reads recommendations.json from S3, fetches real-time price via Finnhub, records paper buy
-- **Design:** Does NOT re-run analysis — uses pre-computed recs to avoid Polygon rate limits
+- **What:** Reads 10 candidates from S3, fetches real-time Finnhub quotes, filters out gap >2%, buys best 5
+- **Design:** Does NOT re-run analysis — uses pre-computed recs + Finnhub real-time filter
 - **Output:** Updates `paper_trades.json` in S3
 - **Budget:** $100/day split across qualified picks ($20 each if 5 qualify)
 

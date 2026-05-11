@@ -54,7 +54,7 @@ def pre_market_recommend(event, context):
     results = run_full_analysis(ohlc_data, top_n=50, include_news=False, daytrade_mode=True)
 
     qualified = [r for r in results if r["composite_score"] >= MIN_SCORE and r["confidence"] in ("HIGH", "MEDIUM")]
-    picks = qualified[:TOP_PICKS]
+    picks = qualified[:TOP_PICKS * 2]
 
     # Get previous close as reference price
     pick_tickers = [r["ticker"] for r in picks]
@@ -126,27 +126,45 @@ def morning_buy(event, context):
     if recs.get("date") != today:
         return {"statusCode": 200, "body": f"Stale recommendations (from {recs.get('date')}), skipping"}
 
-    top = recs["picks"][:TOP_PICKS]
-    picked_tickers = [r["ticker"] for r in top]
-    print(f"Fetching live prices for: {picked_tickers}")
+    candidates = recs["picks"][:TOP_PICKS * 2]
+    picked_tickers = [r["ticker"] for r in candidates]
+    print(f"Fetching live prices for {len(picked_tickers)} candidates: {picked_tickers}")
     live_prices = _fetch_finnhub_quotes(picked_tickers)
     print(f"Live prices: {live_prices}")
 
     if not live_prices:
         return {"statusCode": 200, "body": "Market data unavailable"}
 
-    qualified = [r for r in top if r["composite_score"] >= MIN_SCORE and r["confidence"] in ("HIGH", "MEDIUM")]
+    # Filter: skip stocks that gapped up > 2% from prev close
+    MAX_GAP_PCT = 2.0
+    filtered = []
+    for r in candidates:
+        ticker = r["ticker"]
+        price = live_prices.get(ticker)
+        prev = r.get("prev_close")
+        if not price or not prev:
+            continue
+        gap_pct = (price - prev) / prev * 100
+        r["_gap_pct"] = round(gap_pct, 2)
+        r["_live_price"] = price
+        if gap_pct > MAX_GAP_PCT:
+            print(f"  SKIP {ticker}: gapped +{gap_pct:.1f}%")
+            continue
+        if gap_pct < -MAX_GAP_PCT:
+            print(f"  SKIP {ticker}: gapped {gap_pct:.1f}%")
+            continue
+        filtered.append(r)
 
-    if not qualified:
+    if not filtered:
         trades["trades"].append({
             "date": today, "ticker": "CASH", "open_price": 0, "shares": 0,
             "invested": 0, "close_price": 0, "pnl": 0, "confidence": "SKIP",
             "composite_score": 0,
         })
         save_trades(trades)
-        return {"statusCode": 200, "body": "No qualified trades today — sitting out"}
+        return {"statusCode": 200, "body": "No qualified trades today — all gapped too much"}
 
-    picks = qualified[:TOP_PICKS]
+    picks = filtered[:TOP_PICKS]
     per_stock = DAILY_BUDGET / len(picks)
     bought = []
 
