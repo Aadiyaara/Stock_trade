@@ -92,9 +92,10 @@ def pre_market_recommend(event, context):
     return {"statusCode": 200, "body": f"Recommendations for {today}: {', '.join(ticker_list) or 'NONE'}"}
 
 
-def _fetch_finnhub_quotes(tickers: list[str]) -> dict[str, float]:
-    """Get real-time quotes from Finnhub (60 calls/min free tier)."""
+def _fetch_finnhub_quotes(tickers: list[str]) -> tuple[dict[str, float], dict[str, float]]:
+    """Get real-time quotes from Finnhub. Returns (current_prices, prev_closes)."""
     prices = {}
+    prev_closes = {}
     for ticker in tickers:
         try:
             resp = _req.get("https://finnhub.io/api/v1/quote",
@@ -102,11 +103,14 @@ def _fetch_finnhub_quotes(tickers: list[str]) -> dict[str, float]:
             if resp.status_code == 200:
                 data = resp.json()
                 price = data.get("c", 0)
+                pc = data.get("pc", 0)
                 if price > 0:
                     prices[ticker] = price
+                if pc > 0:
+                    prev_closes[ticker] = pc
         except Exception as e:
             print(f"[finnhub] {ticker}: {e}")
-    return prices
+    return prices, prev_closes
 
 
 def morning_buy(event, context):
@@ -129,19 +133,19 @@ def morning_buy(event, context):
     candidates = recs["picks"][:TOP_PICKS * 2]
     picked_tickers = [r["ticker"] for r in candidates]
     print(f"Fetching live prices for {len(picked_tickers)} candidates: {picked_tickers}")
-    live_prices = _fetch_finnhub_quotes(picked_tickers)
+    live_prices, finnhub_prev = _fetch_finnhub_quotes(picked_tickers)
     print(f"Live prices: {live_prices}")
 
     if not live_prices:
         return {"statusCode": 200, "body": "Market data unavailable"}
 
-    # Filter: skip stocks that gapped up > 2% from prev close
+    # Filter: skip stocks that gapped > 2% from prev close
     MAX_GAP_PCT = 2.0
     filtered = []
     for r in candidates:
         ticker = r["ticker"]
         price = live_prices.get(ticker)
-        prev = r.get("prev_close")
+        prev = r.get("prev_close") or finnhub_prev.get(ticker)
         if not price or not prev:
             continue
         gap_pct = (price - prev) / prev * 100
