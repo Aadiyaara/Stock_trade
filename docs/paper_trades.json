@@ -139,12 +139,82 @@
       "high_price": 78.29,
       "optimal_pnl": 0.19,
       "missed_pnl": 0.17
+    },
+    {
+      "date": "2026-05-18",
+      "ticker": "SOLV",
+      "open_price": 74.43,
+      "shares": 0.268709,
+      "invested": 20.0,
+      "close_price": 76.13,
+      "pnl": 0.46,
+      "confidence": "MEDIUM",
+      "composite_score": 68.8,
+      "high_price": 76.47,
+      "optimal_pnl": 0.55,
+      "missed_pnl": 0.09
+    },
+    {
+      "date": "2026-05-18",
+      "ticker": "DDOG",
+      "open_price": 204.0,
+      "shares": 0.098038,
+      "invested": 20.0,
+      "close_price": 208.82,
+      "pnl": 0.47,
+      "confidence": "HIGH",
+      "composite_score": 68.8,
+      "high_price": 210.82,
+      "optimal_pnl": 0.67,
+      "missed_pnl": 0.2
+    },
+    {
+      "date": "2026-05-18",
+      "ticker": "DVA",
+      "open_price": 199.4,
+      "shares": 0.100301,
+      "invested": 20.0,
+      "close_price": 199.5,
+      "pnl": 0.01,
+      "confidence": "HIGH",
+      "composite_score": 68.8,
+      "high_price": 202.0,
+      "optimal_pnl": 0.26,
+      "missed_pnl": 0.25
+    },
+    {
+      "date": "2026-05-18",
+      "ticker": "FFIV",
+      "open_price": 375.34,
+      "shares": 0.053285,
+      "invested": 20.0,
+      "close_price": 379.74,
+      "pnl": 0.23,
+      "confidence": "HIGH",
+      "composite_score": 68.8,
+      "high_price": 384.99,
+      "optimal_pnl": 0.51,
+      "missed_pnl": 0.28
+    },
+    {
+      "date": "2026-05-18",
+      "ticker": "COHR",
+      "open_price": 382.0,
+      "shares": 0.052356,
+      "invested": 20.0,
+      "close_price": 362.8,
+      "pnl": -1.01,
+      "confidence": "MEDIUM",
+      "composite_score": 68.8,
+      "high_price": 384.0,
+      "optimal_pnl": 0.1,
+      "missed_pnl": 1.11
     }
   ],
   "summary": {
-    "total_invested": 200.0,
-    "total_pnl": 0.3999999999999999,
-    "total_optimal_pnl": 2.69,
-    "days": 2
+    "total_invested": 300.0,
+    "total_pnl": 0.57,
+    "total_optimal_pnl": 4.79,
+    "days": 3
   }
 }
