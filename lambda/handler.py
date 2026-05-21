@@ -17,6 +17,13 @@ LEARNINGS_KEY = "learnings.json"
 DASHBOARD_KEY = "docs/paper_trades.json"
 RECOMMENDATIONS_KEY = "recommendations.json"
 
+# Alpaca live trading
+ALPACA_API_KEY = os.environ.get("ALPACA_API_KEY", "")
+ALPACA_SECRET_KEY = os.environ.get("ALPACA_SECRET_KEY", "")
+ALPACA_LIVE = os.environ.get("ALPACA_LIVE_TRADING", "false").lower() == "true"
+ALPACA_BASE_URL = "https://api.alpaca.markets" if ALPACA_LIVE else "https://paper-api.alpaca.markets"
+LIVE_DAILY_BUDGET = float(os.environ.get("LIVE_DAILY_BUDGET", "1000"))
+
 DAILY_BUDGET = 100.0
 TOP_PICKS = 5
 MIN_SCORE = 40.0
@@ -113,6 +120,54 @@ def _fetch_finnhub_quotes(tickers: list[str]) -> tuple[dict[str, float], dict[st
     return prices, prev_closes
 
 
+def _alpaca_headers():
+    return {"APCA-API-KEY-ID": ALPACA_API_KEY, "APCA-API-SECRET-KEY": ALPACA_SECRET_KEY}
+
+
+def _alpaca_buy(ticker: str, amount: float) -> dict:
+    """Place a market buy order on Alpaca for a dollar amount (fractional shares)."""
+    resp = _req.post(
+        f"{ALPACA_BASE_URL}/v2/orders",
+        headers=_alpaca_headers(),
+        json={
+            "symbol": ticker,
+            "notional": str(round(amount, 2)),
+            "side": "buy",
+            "type": "market",
+            "time_in_force": "day",
+        },
+        timeout=10,
+    )
+    result = {"ticker": ticker, "status_code": resp.status_code}
+    if resp.status_code in (200, 201):
+        order = resp.json()
+        result["order_id"] = order["id"]
+        result["status"] = order["status"]
+    else:
+        result["error"] = resp.text[:200]
+    print(f"[alpaca_buy] {ticker} ${amount}: {result}")
+    return result
+
+
+def _alpaca_sell(ticker: str) -> dict:
+    """Close entire position for a ticker on Alpaca."""
+    resp = _req.delete(
+        f"{ALPACA_BASE_URL}/v2/positions/{ticker}",
+        headers=_alpaca_headers(),
+        timeout=10,
+    )
+    result = {"ticker": ticker, "status_code": resp.status_code}
+    if resp.status_code in (200, 201, 204):
+        if resp.text:
+            order = resp.json()
+            result["order_id"] = order.get("id")
+        result["status"] = "closed"
+    else:
+        result["error"] = resp.text[:200]
+    print(f"[alpaca_sell] {ticker}: {result}")
+    return result
+
+
 def morning_buy(event, context):
     today = date.today().isoformat()
     trades = load_trades()
@@ -193,7 +248,20 @@ def morning_buy(event, context):
         bought.append(ticker)
 
     save_trades(trades)
-    return {"statusCode": 200, "body": f"Bought: {', '.join(bought)}"}
+
+    # Live trading via Alpaca
+    live_results = []
+    if ALPACA_API_KEY and ALPACA_SECRET_KEY:
+        live_per_stock = LIVE_DAILY_BUDGET / len(picks)
+        for r in picks:
+            ticker = r["ticker"]
+            result = _alpaca_buy(ticker, live_per_stock)
+            live_results.append(result)
+
+    body = f"Bought: {', '.join(bought)}"
+    if live_results:
+        body += f" | LIVE: {len([r for r in live_results if r.get('status')])} orders placed"
+    return {"statusCode": 200, "body": body}
 
 
 def close_and_learn(event, context):
@@ -233,6 +301,12 @@ def close_and_learn(event, context):
         trades["summary"]["total_optimal_pnl"] = trades["summary"].get("total_optimal_pnl", 0) + round(day_optimal, 2)
         trades["summary"]["days"] += 1
         save_trades(trades)
+
+        # Close live positions on Alpaca
+        if ALPACA_API_KEY and ALPACA_SECRET_KEY:
+            for t in today_trades:
+                if t["ticker"] != "CASH":
+                    _alpaca_sell(t["ticker"])
 
     # --- Learn ---
     perf = analyze_performance(trades)

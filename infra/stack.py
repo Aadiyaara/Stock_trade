@@ -1,3 +1,4 @@
+import os
 from aws_cdk import (
     Stack,
     Duration,
@@ -75,12 +76,20 @@ class StockTraderStack(Stack):
             **shared_props,
         )
 
+        alpaca_env = {
+            "FINNHUB_API_KEY": "d28r241r01qle9gs976gd28r241r01qle9gs9770",
+            "ALPACA_API_KEY": os.environ.get("ALPACA_API_KEY", ""),
+            "ALPACA_SECRET_KEY": os.environ.get("ALPACA_SECRET_KEY", ""),
+            "ALPACA_LIVE_TRADING": os.environ.get("ALPACA_LIVE_TRADING", "false"),
+            "LIVE_DAILY_BUDGET": os.environ.get("LIVE_DAILY_BUDGET", "1000"),
+        }
+
         morning_fn = _lambda.Function(self, "MorningBuy",
             function_name="stock-morning-buy",
             handler="lambda/handler.morning_buy",
             **{**shared_props, "environment": {
                 **shared_props["environment"],
-                "FINNHUB_API_KEY": "d28r241r01qle9gs976gd28r241r01qle9gs9770",
+                **alpaca_env,
             }},
         )
 
@@ -89,7 +98,7 @@ class StockTraderStack(Stack):
             handler="lambda/handler.close_and_learn",
             **{**shared_props, "environment": {
                 **shared_props["environment"],
-                "FINNHUB_API_KEY": "d28r241r01qle9gs976gd28r241r01qle9gs9770",
+                **alpaca_env,
             }},
         )
 

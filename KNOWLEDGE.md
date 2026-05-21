@@ -80,12 +80,22 @@ stock-recommender/
 - **What:** Reads 10 candidates from S3, fetches real-time Finnhub quotes, filters out gap >2%, buys best 5
 - **Design:** Does NOT re-run analysis — uses pre-computed recs + Finnhub real-time filter
 - **Output:** Updates `paper_trades.json` in S3
-- **Budget:** $100/day split across qualified picks ($20 each if 5 qualify)
+- **Budget:** Paper=$100/day, Live=$1000/day (configurable via LIVE_DAILY_BUDGET)
+- **Alpaca:** If ALPACA_API_KEY is set, places real market orders via Alpaca REST API
 
 ### `stock-close-and-learn` — Close + Analysis
 - **Trigger:** 4:05 PM ET (Mon-Fri, 5 min after market close)
-- **What:** Fetches close/high prices (falls back to /prev on free tier), calculates P/L, runs learning engine
+- **What:** Fetches close/high prices via Finnhub, calculates P/L, runs learning engine
 - **Output:** Updates `paper_trades.json` and `learnings.json` in S3
+- **Alpaca:** If ALPACA_API_KEY is set, closes all live positions at market close
+
+## Alpaca Integration
+- **API:** REST v2, using `requests` directly (no SDK needed)
+- **Auth:** APCA-API-KEY-ID + APCA-API-SECRET-KEY headers
+- **Orders:** Market orders with `notional` (dollar amount) for fractional shares
+- **Close:** DELETE /v2/positions/{symbol} to close entire position
+- **Toggle:** Set ALPACA_LIVE_TRADING=true + provide keys to enable
+- **Paper mode:** Uses paper-api.alpaca.markets by default (safe testing)
 
 ## Scoring System
 
