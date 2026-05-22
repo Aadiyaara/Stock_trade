@@ -77,8 +77,12 @@ stock-recommender/
 
 ### `stock-morning-buy` — Trade Executor
 - **Trigger:** 9:35 AM ET (Mon-Fri, 5 min after market open)
-- **What:** Reads 10 candidates from S3, fetches real-time Finnhub quotes, filters out gap >2%, buys best 5
-- **Design:** Does NOT re-run analysis — uses pre-computed recs + Finnhub real-time filter
+- **What:** Reads 10 candidates from S3, applies 3 filters, buys best 5
+- **Filters (in order):**
+  1. Gap filter: skip if price moved >2% from prev close
+  2. Analyst filter: skip if buy ratio <60% (Finnhub recommendation API)
+  3. Earnings filter: skip if stock reported earnings in last 3 days
+- **Design:** Does NOT re-run analysis — uses pre-computed recs + Finnhub real-time data
 - **Output:** Updates `paper_trades.json` in S3
 - **Budget:** Paper=$100/day, Live=$1000/day (configurable via LIVE_DAILY_BUDGET)
 - **Alpaca:** If ALPACA_API_KEY is set, places real market orders via Alpaca REST API

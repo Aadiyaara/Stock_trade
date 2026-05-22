@@ -120,6 +120,61 @@ def _fetch_finnhub_quotes(tickers: list[str]) -> tuple[dict[str, float], dict[st
     return prices, prev_closes
 
 
+def _fetch_analyst_ratings(tickers: list[str]) -> dict[str, float]:
+    """Get analyst buy ratio for each ticker. Returns {ticker: buy_ratio (0-1)}."""
+    ratings = {}
+    for ticker in tickers:
+        try:
+            resp = _req.get("https://finnhub.io/api/v1/stock/recommendation",
+                            params={"symbol": ticker, "token": FINNHUB_KEY}, timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data:
+                    latest = data[0]
+                    total = latest["strongBuy"] + latest["buy"] + latest["hold"] + latest["sell"] + latest["strongSell"]
+                    if total > 0:
+                        buy_ratio = (latest["strongBuy"] + latest["buy"]) / total
+                        ratings[ticker] = round(buy_ratio, 2)
+        except Exception as e:
+            print(f"[analyst] {ticker}: {e}")
+    return ratings
+
+
+def _has_recent_earnings(tickers: list[str]) -> set[str]:
+    """Check which tickers reported earnings in last 3 days."""
+    today = date.today()
+    from_date = (today - timedelta(days=5)).isoformat()
+    to_date = today.isoformat()
+    recent = set()
+    for ticker in tickers:
+        try:
+            resp = _req.get("https://finnhub.io/api/v1/stock/earnings",
+                            params={"symbol": ticker, "token": FINNHUB_KEY}, timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                for e in data[:4]:
+                    ep = e.get("period", "")
+                    rdate = e.get("surprisePercent")
+                    actual = e.get("actual")
+                    if actual is not None:
+                        recent.add(ticker)
+                        break
+        except Exception:
+            pass
+    # Fallback: use earnings calendar
+    try:
+        resp = _req.get("https://finnhub.io/api/v1/calendar/earnings",
+                        params={"from": from_date, "to": to_date, "token": FINNHUB_KEY}, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            for e in data.get("earningsCalendar", []):
+                if e.get("symbol") in tickers:
+                    recent.add(e["symbol"])
+    except Exception as e:
+        print(f"[earnings_calendar] {e}")
+    return recent
+
+
 def _alpaca_headers():
     return {"APCA-API-KEY-ID": ALPACA_API_KEY, "APCA-API-SECRET-KEY": ALPACA_SECRET_KEY}
 
@@ -213,6 +268,29 @@ def morning_buy(event, context):
             print(f"  SKIP {ticker}: gapped {gap_pct:.1f}%")
             continue
         filtered.append(r)
+
+    # Filter: skip stocks with low analyst buy ratio (<60%)
+    MIN_BUY_RATIO = 0.60
+    filtered_tickers = [r["ticker"] for r in filtered]
+    analyst_ratings = _fetch_analyst_ratings(filtered_tickers)
+    print(f"Analyst ratings: {analyst_ratings}")
+
+    after_analyst = []
+    for r in filtered:
+        ticker = r["ticker"]
+        ratio = analyst_ratings.get(ticker)
+        if ratio is not None and ratio < MIN_BUY_RATIO:
+            print(f"  SKIP {ticker}: analyst buy ratio {ratio:.0%} < 60%")
+            continue
+        after_analyst.append(r)
+
+    # Filter: skip stocks that reported earnings in last 3 days
+    earnings_tickers = [r["ticker"] for r in after_analyst]
+    recent_earnings = _has_recent_earnings(earnings_tickers)
+    if recent_earnings:
+        print(f"  SKIP post-earnings: {recent_earnings}")
+
+    filtered = [r for r in after_analyst if r["ticker"] not in recent_earnings]
 
     if not filtered:
         trades["trades"].append({
