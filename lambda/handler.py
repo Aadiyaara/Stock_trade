@@ -269,28 +269,13 @@ def morning_buy(event, context):
             continue
         filtered.append(r)
 
-    # Filter: skip stocks with low analyst buy ratio (<60%)
-    MIN_BUY_RATIO = 0.60
-    filtered_tickers = [r["ticker"] for r in filtered]
-    analyst_ratings = _fetch_analyst_ratings(filtered_tickers)
-    print(f"Analyst ratings: {analyst_ratings}")
-
-    after_analyst = []
-    for r in filtered:
-        ticker = r["ticker"]
-        ratio = analyst_ratings.get(ticker)
-        if ratio is not None and ratio < MIN_BUY_RATIO:
-            print(f"  SKIP {ticker}: analyst buy ratio {ratio:.0%} < 60%")
-            continue
-        after_analyst.append(r)
-
     # Filter: skip stocks that reported earnings in last 3 days
-    earnings_tickers = [r["ticker"] for r in after_analyst]
+    earnings_tickers = [r["ticker"] for r in filtered]
     recent_earnings = _has_recent_earnings(earnings_tickers)
     if recent_earnings:
         print(f"  SKIP post-earnings: {recent_earnings}")
 
-    filtered = [r for r in after_analyst if r["ticker"] not in recent_earnings]
+    filtered = [r for r in filtered if r["ticker"] not in recent_earnings]
 
     if not filtered:
         trades["trades"].append({
