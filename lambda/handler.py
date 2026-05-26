@@ -141,34 +141,19 @@ def _fetch_analyst_ratings(tickers: list[str]) -> dict[str, float]:
 
 
 def _has_recent_earnings(tickers: list[str]) -> set[str]:
-    """Check which tickers reported earnings in last 3 days."""
+    """Check which tickers reported earnings in last 3 trading days using calendar only."""
     today = date.today()
     from_date = (today - timedelta(days=5)).isoformat()
     to_date = today.isoformat()
     recent = set()
-    for ticker in tickers:
-        try:
-            resp = _req.get("https://finnhub.io/api/v1/stock/earnings",
-                            params={"symbol": ticker, "token": FINNHUB_KEY}, timeout=5)
-            if resp.status_code == 200:
-                data = resp.json()
-                for e in data[:4]:
-                    ep = e.get("period", "")
-                    rdate = e.get("surprisePercent")
-                    actual = e.get("actual")
-                    if actual is not None:
-                        recent.add(ticker)
-                        break
-        except Exception:
-            pass
-    # Fallback: use earnings calendar
+    tickers_set = set(tickers)
     try:
         resp = _req.get("https://finnhub.io/api/v1/calendar/earnings",
                         params={"from": from_date, "to": to_date, "token": FINNHUB_KEY}, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
             for e in data.get("earningsCalendar", []):
-                if e.get("symbol") in tickers:
+                if e.get("symbol") in tickers_set:
                     recent.add(e["symbol"])
     except Exception as e:
         print(f"[earnings_calendar] {e}")
