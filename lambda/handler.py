@@ -259,8 +259,39 @@ def morning_buy(event, context):
     recent_earnings = _has_recent_earnings(earnings_tickers)
     if recent_earnings:
         print(f"  SKIP post-earnings: {recent_earnings}")
-
     filtered = [r for r in filtered if r["ticker"] not in recent_earnings]
+
+    # Filter: blacklist sectors/stocks with 0% win rate
+    BLACKLIST = {"DVA", "ON"}
+    AVOID_SECTORS = {"Semis", "Industrial"}
+    SECTOR_MAP = {
+        "NVDA": "Semis", "ON": "Semis", "AMD": "Semis", "INTC": "Semis", "AVGO": "Semis",
+        "ANET": "Networking", "FFIV": "Networking", "AKAM": "Networking", "NET": "Networking", "CSCO": "Networking",
+        "DD": "Industrial", "EMR": "Industrial", "HON": "Industrial", "CAT": "Industrial", "GE": "Industrial",
+        "DVA": "Healthcare", "HUM": "Healthcare", "ELV": "Healthcare", "UNH": "Healthcare", "CNC": "Healthcare", "BIIB": "Healthcare",
+        "DDOG": "Software", "CRM": "Software", "ORCL": "Software", "CDNS": "Software", "SNPS": "Software",
+        "FTNT": "Cybersecurity", "CRWD": "Cybersecurity", "PANW": "Cybersecurity",
+        "CBOE": "Finance", "GS": "Finance", "FICO": "Finance", "CINF": "Finance", "IBKR": "Finance",
+    }
+
+    before_sector = len(filtered)
+    filtered = [r for r in filtered if r["ticker"] not in BLACKLIST]
+    filtered = [r for r in filtered if SECTOR_MAP.get(r["ticker"], "") not in AVOID_SECTORS]
+
+    # Sector diversification: max 2 picks per sector
+    sector_count = {}
+    diversified = []
+    for r in filtered:
+        sector = SECTOR_MAP.get(r["ticker"], "Other")
+        if sector_count.get(sector, 0) >= 2:
+            print(f"  SKIP {r['ticker']}: already have 2 from {sector}")
+            continue
+        sector_count[sector] = sector_count.get(sector, 0) + 1
+        diversified.append(r)
+    filtered = diversified
+
+    if before_sector != len(filtered):
+        print(f"  Sector/blacklist filter: {before_sector} -> {len(filtered)} candidates")
 
     if not filtered:
         trades["trades"].append({

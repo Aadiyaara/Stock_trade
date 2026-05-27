@@ -77,11 +77,13 @@ stock-recommender/
 
 ### `stock-morning-buy` — Trade Executor
 - **Trigger:** 9:35 AM ET (Mon-Fri, 5 min after market open)
-- **What:** Reads 10 candidates from S3, applies 3 filters, buys best 5
+- **What:** Reads 10 candidates from S3, applies 5 filters, buys best 5
 - **Filters (in order):**
   1. Gap filter: skip if price moved >2% from prev close
-  2. Analyst filter: skip if buy ratio <60% (Finnhub recommendation API)
-  3. Earnings filter: skip if stock reported earnings in last 3 days
+  2. Earnings filter: skip if stock reported earnings in last 3 days
+  3. Blacklist: skip DVA, ON (0% win rate historically)
+  4. Sector ban: skip Semis, Industrials (0% win rate)
+  5. Sector cap: max 2 picks per sector (prevents concentration)
 - **Design:** Does NOT re-run analysis — uses pre-computed recs + Finnhub real-time data
 - **Output:** Updates `paper_trades.json` in S3
 - **Budget:** Paper=$100/day, Live=$1000/day (configurable via LIVE_DAILY_BUDGET)
