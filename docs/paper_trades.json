@@ -209,12 +209,82 @@
       "high_price": 384.0,
       "optimal_pnl": 0.1,
       "missed_pnl": 1.11
+    },
+    {
+      "date": "2026-06-08",
+      "ticker": "HLT",
+      "open_price": 340.94,
+      "shares": 0.058661,
+      "invested": 20.0,
+      "close_price": 340.64,
+      "pnl": -0.02,
+      "confidence": "HIGH",
+      "composite_score": 70.2,
+      "high_price": 344.53,
+      "optimal_pnl": 0.21,
+      "missed_pnl": 0.23
+    },
+    {
+      "date": "2026-06-08",
+      "ticker": "FTNT",
+      "open_price": 146.0,
+      "shares": 0.136986,
+      "invested": 20.0,
+      "close_price": 143.04,
+      "pnl": -0.41,
+      "confidence": "MEDIUM",
+      "composite_score": 68.8,
+      "high_price": 147.0,
+      "optimal_pnl": 0.14,
+      "missed_pnl": 0.54
+    },
+    {
+      "date": "2026-06-08",
+      "ticker": "STLD",
+      "open_price": 269.65,
+      "shares": 0.07417,
+      "invested": 20.0,
+      "close_price": 267.2,
+      "pnl": -0.18,
+      "confidence": "HIGH",
+      "composite_score": 68.8,
+      "high_price": 270.18,
+      "optimal_pnl": 0.04,
+      "missed_pnl": 0.22
+    },
+    {
+      "date": "2026-06-08",
+      "ticker": "HST",
+      "open_price": 24.69,
+      "shares": 0.810045,
+      "invested": 20.0,
+      "close_price": 24.44,
+      "pnl": -0.2,
+      "confidence": "HIGH",
+      "composite_score": 67.9,
+      "high_price": 24.9,
+      "optimal_pnl": 0.17,
+      "missed_pnl": 0.37
+    },
+    {
+      "date": "2026-06-08",
+      "ticker": "TROW",
+      "open_price": 105.97,
+      "shares": 0.188733,
+      "invested": 20.0,
+      "close_price": 105.45,
+      "pnl": -0.1,
+      "confidence": "HIGH",
+      "composite_score": 67.3,
+      "high_price": 106.52,
+      "optimal_pnl": 0.1,
+      "missed_pnl": 0.2
     }
   ],
   "summary": {
-    "total_invested": 300.0,
-    "total_pnl": 0.57,
-    "total_optimal_pnl": 4.79,
-    "days": 3
+    "total_invested": 400.0,
+    "total_pnl": -0.3400000000000001,
+    "total_optimal_pnl": 5.45,
+    "days": 4
   }
 }
