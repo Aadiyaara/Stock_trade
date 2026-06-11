@@ -279,6 +279,61 @@
       "high_price": 106.52,
       "optimal_pnl": 0.1,
       "missed_pnl": 0.2
+    },
+    {
+      "date": "2026-06-10",
+      "ticker": "RVTY",
+      "open_price": 103.67,
+      "shares": 0.19292,
+      "invested": 20.0,
+      "close_price": null,
+      "pnl": null,
+      "confidence": "HIGH",
+      "composite_score": 71.8
+    },
+    {
+      "date": "2026-06-10",
+      "ticker": "GE",
+      "open_price": 329.49,
+      "shares": 0.0607,
+      "invested": 20.0,
+      "close_price": null,
+      "pnl": null,
+      "confidence": "HIGH",
+      "composite_score": 69.6
+    },
+    {
+      "date": "2026-06-10",
+      "ticker": "ODFL",
+      "open_price": 230.84,
+      "shares": 0.08664,
+      "invested": 20.0,
+      "close_price": null,
+      "pnl": null,
+      "confidence": "MEDIUM",
+      "composite_score": 68.8
+    },
+    {
+      "date": "2026-06-10",
+      "ticker": "CRL",
+      "open_price": 188.49,
+      "shares": 0.106106,
+      "invested": 20.0,
+      "close_price": null,
+      "pnl": null,
+      "confidence": "HIGH",
+      "composite_score": 67.0
+    },
+    {
+      "date": "2026-06-10",
+      "ticker": "APTV",
+      "open_price": 67.4,
+      "shares": 0.296736,
+      "invested": 20.0,
+      "close_price": null,
+      "pnl": null,
+      "confidence": "MEDIUM",
+      "composite_score": 65.2
     }
   ],
   "summary": {
