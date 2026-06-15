@@ -99,10 +99,11 @@ def pre_market_recommend(event, context):
     return {"statusCode": 200, "body": f"Recommendations for {today}: {', '.join(ticker_list) or 'NONE'}"}
 
 
-def _fetch_finnhub_quotes(tickers: list[str]) -> tuple[dict[str, float], dict[str, float]]:
-    """Get real-time quotes from Finnhub. Returns (current_prices, prev_closes)."""
+def _fetch_finnhub_quotes(tickers: list[str]) -> tuple[dict[str, float], dict[str, float], dict[str, float]]:
+    """Get real-time quotes from Finnhub. Returns (current_prices, prev_closes, day_highs)."""
     prices = {}
     prev_closes = {}
+    day_highs = {}
     for ticker in tickers:
         try:
             resp = _req.get("https://finnhub.io/api/v1/quote",
@@ -111,13 +112,16 @@ def _fetch_finnhub_quotes(tickers: list[str]) -> tuple[dict[str, float], dict[st
                 data = resp.json()
                 price = data.get("c", 0)
                 pc = data.get("pc", 0)
+                high = data.get("h", 0)
                 if price > 0:
                     prices[ticker] = price
                 if pc > 0:
                     prev_closes[ticker] = pc
+                if high > 0:
+                    day_highs[ticker] = high
         except Exception as e:
             print(f"[finnhub] {ticker}: {e}")
-    return prices, prev_closes
+    return prices, prev_closes, day_highs
 
 
 def _fetch_analyst_ratings(tickers: list[str]) -> dict[str, float]:
@@ -228,7 +232,7 @@ def morning_buy(event, context):
     candidates = recs["picks"][:TOP_PICKS * 2]
     picked_tickers = [r["ticker"] for r in candidates]
     print(f"Fetching live prices for {len(picked_tickers)} candidates: {picked_tickers}")
-    live_prices, finnhub_prev = _fetch_finnhub_quotes(picked_tickers)
+    live_prices, finnhub_prev, _ = _fetch_finnhub_quotes(picked_tickers)
     print(f"Live prices: {live_prices}")
 
     if not live_prices:
@@ -355,13 +359,14 @@ def close_and_learn(event, context):
     day_optimal = 0
     if today_trades:
         tickers = [t["ticker"] for t in today_trades]
-        close_prices, _ = _fetch_finnhub_quotes(tickers)
+        close_prices, _, day_highs = _fetch_finnhub_quotes(tickers)
         print(f"Close prices from Finnhub: {close_prices}")
+        print(f"Day highs from Finnhub: {day_highs}")
 
         for t in today_trades:
             ticker = t["ticker"]
             close_price = close_prices.get(ticker, t["open_price"])
-            high_price = close_price
+            high_price = day_highs.get(ticker, close_price)
 
             pnl = t["shares"] * (close_price - t["open_price"])
             optimal_pnl = t["shares"] * (high_price - t["open_price"])

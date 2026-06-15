@@ -334,12 +334,82 @@
       "pnl": null,
       "confidence": "MEDIUM",
       "composite_score": 65.2
+    },
+    {
+      "date": "2026-06-15",
+      "ticker": "HUM",
+      "open_price": 374.04,
+      "shares": 0.05347,
+      "invested": 20.0,
+      "close_price": 380.29,
+      "pnl": 0.33,
+      "confidence": "HIGH",
+      "composite_score": 72.2,
+      "high_price": 380.66,
+      "optimal_pnl": 0.35,
+      "missed_pnl": 0.02
+    },
+    {
+      "date": "2026-06-15",
+      "ticker": "PANW",
+      "open_price": 280.55,
+      "shares": 0.071289,
+      "invested": 20.0,
+      "close_price": 284.54,
+      "pnl": 0.28,
+      "confidence": "HIGH",
+      "composite_score": 68.8,
+      "high_price": 285.12,
+      "optimal_pnl": 0.33,
+      "missed_pnl": 0.04
+    },
+    {
+      "date": "2026-06-15",
+      "ticker": "BAX",
+      "open_price": 21.03,
+      "shares": 0.951022,
+      "invested": 20.0,
+      "close_price": 20.82,
+      "pnl": -0.2,
+      "confidence": "HIGH",
+      "composite_score": 68.7,
+      "high_price": 21.3,
+      "optimal_pnl": 0.26,
+      "missed_pnl": 0.46
+    },
+    {
+      "date": "2026-06-15",
+      "ticker": "CPT",
+      "open_price": 114.67,
+      "shares": 0.174414,
+      "invested": 20.0,
+      "close_price": 113.5,
+      "pnl": -0.2,
+      "confidence": "HIGH",
+      "composite_score": 67.2,
+      "high_price": 115.47,
+      "optimal_pnl": 0.14,
+      "missed_pnl": 0.34
+    },
+    {
+      "date": "2026-06-15",
+      "ticker": "MAA",
+      "open_price": 138.84,
+      "shares": 0.144051,
+      "invested": 20.0,
+      "close_price": 137.4,
+      "pnl": -0.21,
+      "confidence": "HIGH",
+      "composite_score": 65.9,
+      "high_price": 140.58,
+      "optimal_pnl": 0.25,
+      "missed_pnl": 0.46
     }
   ],
   "summary": {
-    "total_invested": 400.0,
-    "total_pnl": -0.3400000000000001,
-    "total_optimal_pnl": 5.45,
-    "days": 4
+    "total_invested": 500.0,
+    "total_pnl": -0.33000000000000007,
+    "total_optimal_pnl": 6.78,
+    "days": 5
   }
 }

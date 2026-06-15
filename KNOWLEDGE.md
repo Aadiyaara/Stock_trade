@@ -150,8 +150,8 @@ Solves the "gap-and-fade" problem — stocks that gap up overnight but sell off 
 ### Exit Strategy Analysis
 Each trade tracks what you'd have made selling at the high vs holding to close:
 - `pnl`: actual profit (sold at close)
-- `optimal_pnl`: profit if sold at intraday high
-- `missed_pnl`: money left on table
+- `optimal_pnl`: profit if sold at intraday high (uses Finnhub `h` field for real day high)
+- `missed_pnl`: money left on table (optimal_pnl - pnl)
 
 ### Learning Engine
 After each day, analyzes:
