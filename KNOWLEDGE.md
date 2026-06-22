@@ -73,21 +73,31 @@ stock-recommender/
 - **Trigger:** 4:30 AM ET (Mon-Fri)
 - **What:** Screens cached OHLC data, picks top 10 qualified stocks with prev close as reference
 - **Output:** `s3://stock-trades-536697230325/recommendations.json` (public)
-- **Qualification:** composite score ≥ 40 AND confidence ≥ MEDIUM
+- **Qualification:** composite score ≥ 72 AND confidence = HIGH
 
 ### `stock-morning-buy` — Trade Executor
 - **Trigger:** 9:35 AM ET (Mon-Fri, 5 min after market open)
-- **What:** Reads 10 candidates from S3, applies 5 filters, buys best 5
+- **What:** Reads 10 candidates from S3, applies 7 filters, buys best 5
 - **Filters (in order):**
   1. Gap filter: skip if price moved >2% from prev close
   2. Earnings filter: skip if stock reported earnings in last 3 days
-  3. Blacklist: skip DVA, ON (0% win rate historically)
-  4. Sector ban: skip Semis, Industrials (0% win rate)
-  5. Sector cap: max 2 picks per sector (prevents concentration)
+  3. No-repeat rule: skip if ticker was picked on previous trading day
+  4. SPY filter: skip entire day if SPY is down >0.3% from prev close
+  5. Blacklist: skip DVA, ON (0% win rate historically)
+  6. Sector ban: skip Semis, Industrials (0% win rate)
+  7. Sector cap: max 2 picks per sector (prevents concentration)
+- **Min score:** 72 (raised from 40 — score 68-72 bracket was net negative)
 - **Design:** Does NOT re-run analysis — uses pre-computed recs + Finnhub real-time data
 - **Output:** Updates `paper_trades.json` in S3
 - **Budget:** Paper=$100/day, Live=$1000/day (configurable via LIVE_DAILY_BUDGET)
 - **Alpaca:** If ALPACA_API_KEY is set, places real market orders via Alpaca REST API
+
+### `stock-midday-exit` — Profit Target Check
+- **Trigger:** 11:00 AM ET and 1:00 PM ET (Mon-Fri)
+- **What:** Checks open positions, sells any that hit +0.25% profit target
+- **Why:** Stocks typically run up in the morning then fade into close. Capturing early gains prevents afternoon reversals.
+- **Output:** Updates `paper_trades.json` with exit_reason="PROFIT_TARGET"
+- **Alpaca:** If ALPACA_API_KEY is set, closes positions that hit target
 
 ### `stock-close-and-learn` — Close + Analysis
 - **Trigger:** 4:05 PM ET (Mon-Fri, 5 min after market close)

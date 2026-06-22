@@ -26,7 +26,8 @@ LIVE_DAILY_BUDGET = float(os.environ.get("LIVE_DAILY_BUDGET", "1000"))
 
 DAILY_BUDGET = 100.0
 TOP_PICKS = 5
-MIN_SCORE = 40.0
+MIN_SCORE = 72.0
+PROFIT_TARGET_PCT = 0.25
 
 
 def load_trades():
@@ -60,7 +61,7 @@ def pre_market_recommend(event, context):
 
     results = run_full_analysis(ohlc_data, top_n=50, include_news=False, daytrade_mode=True)
 
-    qualified = [r for r in results if r["composite_score"] >= MIN_SCORE and r["confidence"] in ("HIGH", "MEDIUM")]
+    qualified = [r for r in results if r["composite_score"] >= MIN_SCORE and r["confidence"] == "HIGH"]
     picks = qualified[:TOP_PICKS * 2]
 
     # Get previous close as reference price
@@ -265,6 +266,36 @@ def morning_buy(event, context):
         print(f"  SKIP post-earnings: {recent_earnings}")
     filtered = [r for r in filtered if r["ticker"] not in recent_earnings]
 
+    # Filter: no-repeat rule — skip tickers picked yesterday
+    yesterday_tickers = set()
+    past_dates = sorted(set(t["date"] for t in trades["trades"] if t["date"] < today and t["ticker"] != "CASH" and t.get("open_price")), reverse=True)
+    if past_dates:
+        last_trade_date = past_dates[0]
+        yesterday_tickers = set(t["ticker"] for t in trades["trades"] if t["date"] == last_trade_date and t["ticker"] != "CASH")
+    if yesterday_tickers:
+        before_repeat = len(filtered)
+        filtered = [r for r in filtered if r["ticker"] not in yesterday_tickers]
+        if len(filtered) < before_repeat:
+            skipped_tickers = yesterday_tickers & set(r["ticker"] for r in candidates)
+            print(f"  SKIP {before_repeat - len(filtered)} repeat tickers from {last_trade_date}: {skipped_tickers}")
+
+    # Filter: SPY check — skip day if broad market is down > 0.3%
+    spy_prices, spy_prev, _ = _fetch_finnhub_quotes(["SPY"])
+    spy_price = spy_prices.get("SPY", 0)
+    spy_pc = spy_prev.get("SPY", 0)
+    if spy_price and spy_pc:
+        spy_change = (spy_price - spy_pc) / spy_pc * 100
+        print(f"  SPY change: {spy_change:+.2f}%")
+        if spy_change < -0.3:
+            print(f"  SKIP ALL: SPY down {spy_change:.2f}%, market risk too high")
+            trades["trades"].append({
+                "date": today, "ticker": "CASH", "open_price": 0, "shares": 0,
+                "invested": 0, "close_price": 0, "pnl": 0, "confidence": "SKIP",
+                "composite_score": 0, "skip_reason": f"SPY {spy_change:+.2f}%",
+            })
+            save_trades(trades)
+            return {"statusCode": 200, "body": f"Sitting out — SPY down {spy_change:.2f}%"}
+
     # Filter: blacklist sectors/stocks with 0% win rate
     BLACKLIST = {"DVA", "ON"}
     AVOID_SECTORS = {"Semis", "Industrial"}
@@ -353,10 +384,11 @@ def close_and_learn(event, context):
     trades = load_trades()
 
     today_trades = [t for t in trades["trades"] if t["date"] == today and t["close_price"] is None]
+    already_closed = [t for t in trades["trades"] if t["date"] == today and t["close_price"] is not None and t["ticker"] != "CASH"]
 
-    # --- Close trades ---
-    day_pnl = 0
-    day_optimal = 0
+    # --- Close remaining trades ---
+    day_pnl = sum(t.get("pnl", 0) for t in already_closed)
+    day_optimal = sum(t.get("optimal_pnl", 0) for t in already_closed)
     if today_trades:
         tickers = [t["ticker"] for t in today_trades]
         close_prices, _, day_highs = _fetch_finnhub_quotes(tickers)
@@ -376,6 +408,7 @@ def close_and_learn(event, context):
             t["pnl"] = round(pnl, 2)
             t["optimal_pnl"] = round(optimal_pnl, 2)
             t["missed_pnl"] = round(optimal_pnl - pnl, 2)
+            t["exit_reason"] = "HELD_TO_CLOSE"
 
             day_pnl += pnl
             day_optimal += optimal_pnl
@@ -407,6 +440,49 @@ def close_and_learn(event, context):
         save_learnings(learnings)
 
     return {"statusCode": 200, "body": f"Day P/L: ${day_pnl:+.2f} | Learning complete"}
+
+
+def midday_exit_check(event, context):
+    """Runs at 11:00 AM and 1:00 PM ET — sells positions that hit profit target or stop loss."""
+    today = date.today().isoformat()
+    trades = load_trades()
+
+    open_trades = [t for t in trades["trades"] if t["date"] == today and t["close_price"] is None]
+    if not open_trades:
+        return {"statusCode": 200, "body": "No open trades to check"}
+
+    tickers = [t["ticker"] for t in open_trades]
+    current_prices, _, _ = _fetch_finnhub_quotes(tickers)
+    print(f"[midday] Prices: {current_prices}")
+
+    exits = []
+    for t in open_trades:
+        ticker = t["ticker"]
+        price = current_prices.get(ticker)
+        if not price:
+            continue
+
+        open_price = t["open_price"]
+        gain_pct = (price - open_price) / open_price * 100
+
+        if gain_pct >= PROFIT_TARGET_PCT:
+            pnl = t["shares"] * (price - open_price)
+            t["close_price"] = round(price, 2)
+            t["high_price"] = round(price, 2)
+            t["pnl"] = round(pnl, 2)
+            t["optimal_pnl"] = round(pnl, 2)
+            t["missed_pnl"] = 0.0
+            t["exit_reason"] = "PROFIT_TARGET"
+            exits.append(ticker)
+            print(f"  TARGET HIT {ticker}: +{gain_pct:.2f}% (target={PROFIT_TARGET_PCT}%)")
+
+            if ALPACA_API_KEY and ALPACA_SECRET_KEY:
+                _alpaca_sell(ticker)
+
+    if exits:
+        save_trades(trades)
+
+    return {"statusCode": 200, "body": f"Midday check: {len(exits)} exits ({', '.join(exits) or 'none'})"}
 
 
 def build_cache(event, context):

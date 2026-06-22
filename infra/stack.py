@@ -102,6 +102,15 @@ class StockTraderStack(Stack):
             }},
         )
 
+        midday_fn = _lambda.Function(self, "MiddayExitCheck",
+            function_name="stock-midday-exit",
+            handler="lambda/handler.midday_exit_check",
+            **{**shared_props, "environment": {
+                **shared_props["environment"],
+                **alpaca_env,
+            }},
+        )
+
         cache_props = {**shared_props, "timeout": Duration.minutes(10)}
         cache_fn = _lambda.Function(self, "BuildCache",
             function_name="stock-build-cache",
@@ -112,6 +121,7 @@ class StockTraderStack(Stack):
         bucket.grant_read_write(recommend_fn)
         bucket.grant_read_write(morning_fn)
         bucket.grant_read_write(close_fn)
+        bucket.grant_read_write(midday_fn)
         bucket.grant_read_write(cache_fn)
 
         # Cache runs every 30min from 12AM-4AM ET (4-8 UTC) — 50 tickers/run × 10 runs = 500 tickers
@@ -133,6 +143,13 @@ class StockTraderStack(Stack):
             rule_name="stock-morning-buy",
             schedule=events.Schedule.cron(minute="35", hour="13", week_day="MON-FRI"),
             targets=[targets.LambdaFunction(morning_fn)],
+        )
+
+        # 11:00 AM ET = 15:00 UTC, 1:00 PM ET = 17:00 UTC
+        events.Rule(self, "MiddaySchedule",
+            rule_name="stock-midday-exit",
+            schedule=events.Schedule.cron(minute="0", hour="15,17", week_day="MON-FRI"),
+            targets=[targets.LambdaFunction(midday_fn)],
         )
 
         # 4:05 PM ET = 20:05 UTC
