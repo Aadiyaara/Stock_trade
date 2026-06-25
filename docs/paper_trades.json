@@ -404,12 +404,82 @@
       "high_price": 140.58,
       "optimal_pnl": 0.25,
       "missed_pnl": 0.46
+    },
+    {
+      "date": "2026-06-25",
+      "ticker": "PANW",
+      "open_price": 288.94,
+      "shares": 0.069219,
+      "invested": 20.0,
+      "close_price": 293.09,
+      "pnl": 0.29,
+      "confidence": "HIGH",
+      "composite_score": 67.5,
+      "high_price": 295.51,
+      "optimal_pnl": 0.45,
+      "missed_pnl": 0.17
+    },
+    {
+      "date": "2026-06-25",
+      "ticker": "KMI",
+      "open_price": 32.43,
+      "shares": 0.616713,
+      "invested": 20.0,
+      "close_price": 32.99,
+      "pnl": 0.35,
+      "confidence": "HIGH",
+      "composite_score": 65.2,
+      "high_price": 33.27,
+      "optimal_pnl": 0.52,
+      "missed_pnl": 0.17
+    },
+    {
+      "date": "2026-06-25",
+      "ticker": "MRNA",
+      "open_price": 60.33,
+      "shares": 0.33151,
+      "invested": 20.0,
+      "close_price": 59.75,
+      "pnl": -0.19,
+      "confidence": "MEDIUM",
+      "composite_score": 64.4,
+      "high_price": 61.86,
+      "optimal_pnl": 0.51,
+      "missed_pnl": 0.7
+    },
+    {
+      "date": "2026-06-25",
+      "ticker": "FTNT",
+      "open_price": 145.91,
+      "shares": 0.137071,
+      "invested": 20.0,
+      "close_price": 149.93,
+      "pnl": 0.55,
+      "confidence": "HIGH",
+      "composite_score": 63.8,
+      "high_price": 151.97,
+      "optimal_pnl": 0.83,
+      "missed_pnl": 0.28
+    },
+    {
+      "date": "2026-06-25",
+      "ticker": "GL",
+      "open_price": 177.28,
+      "shares": 0.112816,
+      "invested": 20.0,
+      "close_price": 176.6,
+      "pnl": -0.08,
+      "confidence": "HIGH",
+      "composite_score": 62.1,
+      "high_price": 181.15,
+      "optimal_pnl": 0.44,
+      "missed_pnl": 0.51
     }
   ],
   "summary": {
-    "total_invested": 500.0,
-    "total_pnl": -0.33000000000000007,
-    "total_optimal_pnl": 6.78,
-    "days": 5
+    "total_invested": 600.0,
+    "total_pnl": 0.59,
+    "total_optimal_pnl": 9.530000000000001,
+    "days": 6
   }
 }
