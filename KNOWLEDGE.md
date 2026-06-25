@@ -73,7 +73,7 @@ stock-recommender/
 - **Trigger:** 4:30 AM ET (Mon-Fri)
 - **What:** Screens cached OHLC data, picks top 10 qualified stocks with prev close as reference
 - **Output:** `s3://stock-trades-536697230325/recommendations.json` (public)
-- **Qualification:** composite score ≥ 72 AND confidence = HIGH
+- **Qualification:** composite score ≥ 65 AND confidence = HIGH
 
 ### `stock-morning-buy` — Trade Executor
 - **Trigger:** 9:35 AM ET (Mon-Fri, 5 min after market open)
@@ -86,7 +86,7 @@ stock-recommender/
   5. Blacklist: skip DVA, ON (0% win rate historically)
   6. Sector ban: skip Semis, Industrials (0% win rate)
   7. Sector cap: max 2 picks per sector (prevents concentration)
-- **Min score:** 72 (raised from 40 — score 68-72 bracket was net negative)
+- **Min score:** 65 + HIGH confidence only (MEDIUM was net negative; 72 was too strict — zero picks most days)
 - **Design:** Does NOT re-run analysis — uses pre-computed recs + Finnhub real-time data
 - **Output:** Updates `paper_trades.json` in S3
 - **Budget:** Paper=$100/day, Live=$1000/day (configurable via LIVE_DAILY_BUDGET)
