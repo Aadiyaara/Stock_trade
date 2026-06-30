@@ -194,6 +194,45 @@ def _alpaca_buy(ticker: str, amount: float) -> dict:
     return result
 
 
+def _alpaca_get_position(ticker: str) -> dict:
+    """Get current position details for a ticker."""
+    resp = _req.get(
+        f"{ALPACA_BASE_URL}/v2/positions/{ticker}",
+        headers=_alpaca_headers(),
+        timeout=10,
+    )
+    if resp.status_code == 200:
+        return resp.json()
+    return {}
+
+
+def _alpaca_place_limit_sell(ticker: str, qty: str, limit_price: float) -> dict:
+    """Place a limit sell order (profit target) that auto-executes when price is hit."""
+    resp = _req.post(
+        f"{ALPACA_BASE_URL}/v2/orders",
+        headers=_alpaca_headers(),
+        json={
+            "symbol": ticker,
+            "qty": qty,
+            "side": "sell",
+            "type": "limit",
+            "limit_price": str(round(limit_price, 2)),
+            "time_in_force": "day",
+        },
+        timeout=10,
+    )
+    result = {"ticker": ticker, "status_code": resp.status_code}
+    if resp.status_code in (200, 201):
+        order = resp.json()
+        result["order_id"] = order["id"]
+        result["status"] = order["status"]
+        result["limit_price"] = limit_price
+    else:
+        result["error"] = resp.text[:200]
+    print(f"[alpaca_limit_sell] {ticker} @ ${limit_price:.2f}: {result}")
+    return result
+
+
 def _alpaca_sell(ticker: str) -> dict:
     """Close entire position for a ticker on Alpaca."""
     resp = _req.delete(
@@ -366,11 +405,23 @@ def morning_buy(event, context):
     # Live trading via Alpaca
     live_results = []
     if ALPACA_API_KEY and ALPACA_SECRET_KEY:
+        import time
         live_per_stock = LIVE_DAILY_BUDGET / len(picks)
         for r in picks:
             ticker = r["ticker"]
             result = _alpaca_buy(ticker, live_per_stock)
             live_results.append(result)
+
+        # Wait for fills, then place limit sell orders at profit target
+        time.sleep(5)
+        for r in picks:
+            ticker = r["ticker"]
+            pos = _alpaca_get_position(ticker)
+            if pos and pos.get("qty"):
+                avg_price = float(pos["avg_entry_price"])
+                qty = pos["qty"]
+                target_price = round(avg_price * (1 + PROFIT_TARGET_PCT / 100), 2)
+                _alpaca_place_limit_sell(ticker, qty, target_price)
 
     body = f"Bought: {', '.join(bought)}"
     if live_results:

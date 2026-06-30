@@ -108,8 +108,10 @@ stock-recommender/
 ## Alpaca Integration
 - **API:** REST v2, using `requests` directly (no SDK needed)
 - **Auth:** APCA-API-KEY-ID + APCA-API-SECRET-KEY headers
-- **Orders:** Market orders with `notional` (dollar amount) for fractional shares
-- **Close:** DELETE /v2/positions/{symbol} to close entire position
+- **Orders:** Market buy with `notional` (dollar amount) for fractional shares
+- **Profit target:** After buy fills, immediately places a limit sell at entry + 0.25%. Alpaca watches price every second and sells the instant target is hit — no Lambda needed.
+- **Midday Lambda:** Backup check at 11 AM / 1 PM in case limit order fails or for paper-trade tracking
+- **Close:** DELETE /v2/positions/{symbol} to close remaining positions at EOD
 - **Toggle:** Set ALPACA_LIVE_TRADING=true + provide keys to enable
 - **Paper mode:** Uses paper-api.alpaca.markets by default (safe testing)
 
