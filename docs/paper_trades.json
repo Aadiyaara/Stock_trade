@@ -474,12 +474,82 @@
       "high_price": 181.15,
       "optimal_pnl": 0.44,
       "missed_pnl": 0.51
+    },
+    {
+      "date": "2026-07-01",
+      "ticker": "VLO",
+      "open_price": 263.04,
+      "shares": 0.076034,
+      "invested": 20.0,
+      "close_price": 269.38,
+      "pnl": 0.48,
+      "confidence": "HIGH",
+      "composite_score": 69.0,
+      "high_price": 269.9,
+      "optimal_pnl": 0.52,
+      "missed_pnl": 0.04
+    },
+    {
+      "date": "2026-07-01",
+      "ticker": "LUV",
+      "open_price": 52.05,
+      "shares": 0.384246,
+      "invested": 20.0,
+      "close_price": 50.5,
+      "pnl": -0.6,
+      "confidence": "HIGH",
+      "composite_score": 68.8,
+      "high_price": 52.23,
+      "optimal_pnl": 0.07,
+      "missed_pnl": 0.66
+    },
+    {
+      "date": "2026-07-01",
+      "ticker": "WMB",
+      "open_price": 74.16,
+      "shares": 0.269687,
+      "invested": 20.0,
+      "close_price": 72.77,
+      "pnl": -0.37,
+      "confidence": "HIGH",
+      "composite_score": 66.5,
+      "high_price": 74.52,
+      "optimal_pnl": 0.1,
+      "missed_pnl": 0.47
+    },
+    {
+      "date": "2026-07-01",
+      "ticker": "MPC",
+      "open_price": 257.46,
+      "shares": 0.077682,
+      "invested": 20.0,
+      "close_price": 264.89,
+      "pnl": 0.58,
+      "confidence": "HIGH",
+      "composite_score": 66.1,
+      "high_price": 264.96,
+      "optimal_pnl": 0.58,
+      "missed_pnl": 0.01
+    },
+    {
+      "date": "2026-07-01",
+      "ticker": "COO",
+      "open_price": 72.31,
+      "shares": 0.276587,
+      "invested": 20.0,
+      "close_price": 71.95,
+      "pnl": -0.1,
+      "confidence": "MEDIUM",
+      "composite_score": 66.1,
+      "high_price": 73.53,
+      "optimal_pnl": 0.34,
+      "missed_pnl": 0.44
     }
   ],
   "summary": {
-    "total_invested": 600.0,
-    "total_pnl": 0.59,
-    "total_optimal_pnl": 9.530000000000001,
-    "days": 6
+    "total_invested": 700.0,
+    "total_pnl": 0.58,
+    "total_optimal_pnl": 11.14,
+    "days": 7
   }
 }
