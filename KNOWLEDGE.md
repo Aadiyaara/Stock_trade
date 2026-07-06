@@ -111,7 +111,7 @@ stock-recommender/
 - **Orders:** Market buy with `notional` (dollar amount) for fractional shares
 - **Profit target:** After buy fills, immediately places a limit sell at entry + 0.25%. Alpaca watches price every second and sells the instant target is hit — no Lambda needed.
 - **Midday Lambda:** Backup check at 11 AM / 1 PM in case limit order fails or for paper-trade tracking
-- **Close:** DELETE /v2/positions/{symbol} to close remaining positions at EOD
+- **Close:** DELETE /v2/positions/{symbol} to close remaining positions at EOD. Safety net sweeps GET /v2/positions and closes any orphaned positions not tracked in paper_trades.json.
 - **Toggle:** Set ALPACA_LIVE_TRADING=true + provide keys to enable
 - **Paper mode:** Uses paper-api.alpaca.markets by default (safe testing)
 

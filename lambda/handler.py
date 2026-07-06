@@ -476,6 +476,16 @@ def close_and_learn(event, context):
                 if t["ticker"] != "CASH":
                     _alpaca_sell(t["ticker"])
 
+    # Safety net: close any orphaned Alpaca positions not tracked in paper_trades
+    if ALPACA_API_KEY and ALPACA_SECRET_KEY:
+        resp = _req.get(f"{ALPACA_BASE_URL}/v2/positions", headers=_alpaca_headers(), timeout=10)
+        if resp.status_code == 200:
+            positions = resp.json()
+            if positions:
+                print(f"[close] Sweeping {len(positions)} orphaned position(s)")
+                for p in positions:
+                    _alpaca_sell(p["symbol"])
+
     # --- Learn ---
     perf = analyze_performance(trades)
     if perf["status"] != "NO_DATA":
