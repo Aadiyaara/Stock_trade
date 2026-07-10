@@ -82,7 +82,7 @@ stock-recommender/
   1. Gap filter: skip if price moved >2% from prev close
   2. Earnings filter: skip if stock reported earnings in last 3 days
   3. No-repeat rule: skip if ticker was picked on previous trading day
-  4. SPY filter: skip entire day if SPY is down >0.3% from prev close
+  4. ~~SPY filter~~ REMOVED — was skipping 37% of days; with limit sells at +0.25%, picks still profit on red days
   5. Blacklist: skip DVA, ON (0% win rate historically)
   6. Sector ban: skip Semis, Industrials (0% win rate)
   7. Sector cap: max 2 picks per sector (prevents concentration)

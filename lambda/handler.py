@@ -318,23 +318,6 @@ def morning_buy(event, context):
             skipped_tickers = yesterday_tickers & set(r["ticker"] for r in candidates)
             print(f"  SKIP {before_repeat - len(filtered)} repeat tickers from {last_trade_date}: {skipped_tickers}")
 
-    # Filter: SPY check — skip day if broad market is down > 0.3%
-    spy_prices, spy_prev, _ = _fetch_finnhub_quotes(["SPY"])
-    spy_price = spy_prices.get("SPY", 0)
-    spy_pc = spy_prev.get("SPY", 0)
-    if spy_price and spy_pc:
-        spy_change = (spy_price - spy_pc) / spy_pc * 100
-        print(f"  SPY change: {spy_change:+.2f}%")
-        if spy_change < -0.3:
-            print(f"  SKIP ALL: SPY down {spy_change:.2f}%, market risk too high")
-            trades["trades"].append({
-                "date": today, "ticker": "CASH", "open_price": 0, "shares": 0,
-                "invested": 0, "close_price": 0, "pnl": 0, "confidence": "SKIP",
-                "composite_score": 0, "skip_reason": f"SPY {spy_change:+.2f}%",
-            })
-            save_trades(trades)
-            return {"statusCode": 200, "body": f"Sitting out — SPY down {spy_change:.2f}%"}
-
     # Filter: blacklist sectors/stocks with 0% win rate
     BLACKLIST = {"DVA", "ON"}
     AVOID_SECTORS = {"Semis", "Industrial"}
