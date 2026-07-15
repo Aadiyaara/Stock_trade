@@ -544,12 +544,82 @@
       "high_price": 73.53,
       "optimal_pnl": 0.34,
       "missed_pnl": 0.44
+    },
+    {
+      "date": "2026-07-15",
+      "ticker": "GEN",
+      "open_price": 26.86,
+      "shares": 0.744602,
+      "invested": 20.0,
+      "close_price": 26.45,
+      "pnl": -0.31,
+      "confidence": "HIGH",
+      "composite_score": 69.4,
+      "high_price": 27.21,
+      "optimal_pnl": 0.26,
+      "missed_pnl": 0.57
+    },
+    {
+      "date": "2026-07-15",
+      "ticker": "AMP",
+      "open_price": 518.88,
+      "shares": 0.038545,
+      "invested": 20.0,
+      "close_price": 527.26,
+      "pnl": 0.32,
+      "confidence": "HIGH",
+      "composite_score": 68.8,
+      "high_price": 533.04,
+      "optimal_pnl": 0.55,
+      "missed_pnl": 0.22
+    },
+    {
+      "date": "2026-07-15",
+      "ticker": "AAPL",
+      "open_price": 317.62,
+      "shares": 0.062967,
+      "invested": 20.0,
+      "close_price": 327.5,
+      "pnl": 0.62,
+      "confidence": "HIGH",
+      "composite_score": 68.8,
+      "high_price": 328.72,
+      "optimal_pnl": 0.7,
+      "missed_pnl": 0.08
+    },
+    {
+      "date": "2026-07-15",
+      "ticker": "NVDA",
+      "open_price": 212.01,
+      "shares": 0.094335,
+      "invested": 20.0,
+      "close_price": 212.5,
+      "pnl": 0.05,
+      "confidence": "HIGH",
+      "composite_score": 65.7,
+      "high_price": 213.81,
+      "optimal_pnl": 0.17,
+      "missed_pnl": 0.12
+    },
+    {
+      "date": "2026-07-15",
+      "ticker": "FTNT",
+      "open_price": 169.39,
+      "shares": 0.118071,
+      "invested": 20.0,
+      "close_price": 164.51,
+      "pnl": -0.58,
+      "confidence": "HIGH",
+      "composite_score": 65.2,
+      "high_price": 170.35,
+      "optimal_pnl": 0.11,
+      "missed_pnl": 0.69
     }
   ],
   "summary": {
-    "total_invested": 700.0,
-    "total_pnl": 0.58,
-    "total_optimal_pnl": 11.14,
-    "days": 7
+    "total_invested": 800.0,
+    "total_pnl": 0.69,
+    "total_optimal_pnl": 12.93,
+    "days": 8
   }
 }
