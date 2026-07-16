@@ -28,6 +28,7 @@ DAILY_BUDGET = 100.0
 TOP_PICKS = 5
 MIN_SCORE = 65.0
 PROFIT_TARGET_PCT = 0.25
+STOP_LOSS_PCT = 1.0
 
 
 def load_trades():
@@ -169,18 +170,26 @@ def _alpaca_headers():
     return {"APCA-API-KEY-ID": ALPACA_API_KEY, "APCA-API-SECRET-KEY": ALPACA_SECRET_KEY}
 
 
-def _alpaca_buy(ticker: str, amount: float) -> dict:
-    """Place a market buy order on Alpaca for a dollar amount (fractional shares)."""
+def _alpaca_buy(ticker: str, amount: float, entry_price: float = 0) -> dict:
+    """Place a bracket order: market buy + take-profit limit + stop-loss stop."""
+    order_body = {
+        "symbol": ticker,
+        "notional": str(round(amount, 2)),
+        "side": "buy",
+        "type": "market",
+        "time_in_force": "day",
+    }
+    if entry_price > 0:
+        take_profit_price = round(entry_price * (1 + PROFIT_TARGET_PCT / 100), 2)
+        stop_loss_price = round(entry_price * (1 - STOP_LOSS_PCT / 100), 2)
+        order_body["order_class"] = "bracket"
+        order_body["take_profit"] = {"limit_price": str(take_profit_price)}
+        order_body["stop_loss"] = {"stop_price": str(stop_loss_price)}
+
     resp = _req.post(
         f"{ALPACA_BASE_URL}/v2/orders",
         headers=_alpaca_headers(),
-        json={
-            "symbol": ticker,
-            "notional": str(round(amount, 2)),
-            "side": "buy",
-            "type": "market",
-            "time_in_force": "day",
-        },
+        json=order_body,
         timeout=10,
     )
     result = {"ticker": ticker, "status_code": resp.status_code}
@@ -190,7 +199,7 @@ def _alpaca_buy(ticker: str, amount: float) -> dict:
         result["status"] = order["status"]
     else:
         result["error"] = resp.text[:200]
-    print(f"[alpaca_buy] {ticker} ${amount}: {result}")
+    print(f"[alpaca_buy] {ticker} ${amount} (TP=${entry_price*(1+PROFIT_TARGET_PCT/100):.2f} SL=${entry_price*(1-STOP_LOSS_PCT/100):.2f}): {result}")
     return result
 
 
@@ -385,26 +394,15 @@ def morning_buy(event, context):
 
     save_trades(trades)
 
-    # Live trading via Alpaca
+    # Live trading via Alpaca (bracket orders: buy + take-profit + stop-loss)
     live_results = []
     if ALPACA_API_KEY and ALPACA_SECRET_KEY:
-        import time
         live_per_stock = LIVE_DAILY_BUDGET / len(picks)
         for r in picks:
             ticker = r["ticker"]
-            result = _alpaca_buy(ticker, live_per_stock)
+            entry_price = live_prices.get(ticker, 0)
+            result = _alpaca_buy(ticker, live_per_stock, entry_price)
             live_results.append(result)
-
-        # Wait for fills, then place limit sell orders at profit target
-        time.sleep(5)
-        for r in picks:
-            ticker = r["ticker"]
-            pos = _alpaca_get_position(ticker)
-            if pos and pos.get("qty"):
-                avg_price = float(pos["avg_entry_price"])
-                qty = pos["qty"]
-                target_price = round(avg_price * (1 + PROFIT_TARGET_PCT / 100), 2)
-                _alpaca_place_limit_sell(ticker, qty, target_price)
 
     body = f"Bought: {', '.join(bought)}"
     if live_results:
@@ -509,16 +507,23 @@ def midday_exit_check(event, context):
         open_price = t["open_price"]
         gain_pct = (price - open_price) / open_price * 100
 
+        exit_reason = None
         if gain_pct >= PROFIT_TARGET_PCT:
+            exit_reason = "PROFIT_TARGET"
+            print(f"  TARGET HIT {ticker}: +{gain_pct:.2f}%")
+        elif gain_pct <= -STOP_LOSS_PCT:
+            exit_reason = "STOP_LOSS"
+            print(f"  STOP LOSS {ticker}: {gain_pct:.2f}%")
+
+        if exit_reason:
             pnl = t["shares"] * (price - open_price)
             t["close_price"] = round(price, 2)
             t["high_price"] = round(price, 2)
             t["pnl"] = round(pnl, 2)
-            t["optimal_pnl"] = round(pnl, 2)
+            t["optimal_pnl"] = round(pnl, 2) if gain_pct > 0 else 0.0
             t["missed_pnl"] = 0.0
-            t["exit_reason"] = "PROFIT_TARGET"
+            t["exit_reason"] = exit_reason
             exits.append(ticker)
-            print(f"  TARGET HIT {ticker}: +{gain_pct:.2f}% (target={PROFIT_TARGET_PCT}%)")
 
             if ALPACA_API_KEY and ALPACA_SECRET_KEY:
                 _alpaca_sell(ticker)
